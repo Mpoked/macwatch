@@ -51,8 +51,9 @@ def html_response(body: str, status: int = 200) -> Response:
 
 def redirect(location: str, msg: str | None = None, kind: str = "good") -> Response:
     if msg:
-        sep = "&" if "?" in location else "?"
-        location = f"{location}{sep}msg={quote(msg)}&kind={kind}"
+        path, hash_mark, fragment = location.partition("#")
+        sep = "&" if "?" in path else "?"
+        location = f"{path}{sep}msg={quote(msg)}&kind={kind}{hash_mark}{fragment}"
     return Response(303, b"", [("Location", location)])
 
 

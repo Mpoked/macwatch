@@ -67,6 +67,7 @@ class InventoryConfig:
 class FacebookConfig:
     enabled: bool
     feed_url: str = "http://127.0.0.1:5000/rss"
+    config_path: Path | None = None     # config.json fb-mp-rss, upravuje se z dashboardu
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +223,13 @@ def parse_travel(data: dict[str, Any]) -> TravelSettings:
     return cfg
 
 
+def _resolve(base_dir: Path, value: str | None) -> Path | None:
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else (base_dir / path).resolve()
+
+
 def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
     http = _require(data, "http", "")
     sources = _require(data, "sources", "")
@@ -253,6 +261,7 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
         facebook=FacebookConfig(
             enabled=bool(facebook.get("enabled", False)),
             feed_url=facebook.get("feed_url", "http://127.0.0.1:5000/rss"),
+            config_path=_resolve(base_dir, facebook.get("config_path")),
         ),
         parsing=parse_parsing(_require(data, "parsing", "")),
         pricing=parse_pricing(_require(data, "pricing", "")),

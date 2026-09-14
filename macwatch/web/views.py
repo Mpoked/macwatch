@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from macwatch import fbconfig
 from macwatch.config import AppConfig, ConfigError
 from macwatch.db import Database
 from macwatch.geo import default_gazetteer
@@ -747,11 +748,13 @@ def settings_page(ctx: Ctx, submitted: dict[str, Any] | None = None, error: str 
         + (f'<p class=muted>{e(home_info)}</p>' if group == "Dojezd" else "") + "</div>"
         for group, items in groups.items())
     notice = f'<div class="flash bad">{e(error)}</div>' if error else ""
+    facebook = facebook_panel(ctx, cfg)
     test = ('<form method=post action="/nastaveni/test-webhook" class=panel><h2 style="margin-top:0">Test upozornění</h2>'
             '<p class=muted>Pošle na uložený webhook zkušební zprávu.</p><button>Odeslat testovací zprávu</button></form>')
     body = (f"<h1>Nastavení</h1>{notice}<p class=muted>Změny se uloží do databáze a služba je použije při "
             "dalším průchodu, restart není potřeba. Regulární výrazy parseru zůstávají v config.json.</p>"
-            f'<form method=post action="/nastaveni">{sections}<p><button>Uložit nastavení</button></p></form>{test}')
+            f'<form method=post action="/nastaveni">{sections}<p><button>Uložit nastavení</button></p></form>'
+            f'{facebook}{test}')
     return ctx.page("Nastavení", "/nastaveni", body) if not error else \
         html_response(layout("Nastavení", "/nastaveni", body), 400)
 
@@ -779,6 +782,70 @@ def settings_save(ctx: Ctx) -> Response:
     except ConfigError as exc:
         return settings_page(ctx, values, f"Neuloženo: {exc}")
     return redirect("/nastaveni", "Nastavení uloženo.")
+
+
+def facebook_panel(ctx: Ctx, cfg: AppConfig, submitted: fbconfig.FbSettings | None = None,
+                   error: str | None = None) -> str:
+    path = cfg.facebook.config_path
+    head = '<div class=panel id=facebook><h2 style="margin-top:0">Facebook Marketplace</h2>'
+    if path is None:
+        return (head + '<p class=muted>Cesta ke configu fb-mp-rss není nastavená. Doplň do config.json '
+                '<code>sources.facebook.config_path</code>, třeba <code>../fb-mp-rss/data/config.json</code>.</p></div>')
+    try:
+        _, current = fbconfig.load(path)
+    except fbconfig.FbConfigError as exc:
+        return head + f'<div class="flash bad">{e(exc)}</div></div>'
+    values = submitted or current
+    run = ctx.db.conn.execute(
+        "SELECT started_at, items_seen, items_new, errors FROM poll_runs WHERE source = 'facebook' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    count = ctx.db.conn.execute("SELECT COUNT(*) FROM listings WHERE source = 'facebook'").fetchone()[0]
+    status = (f"Naposled načteno {when(run['started_at'])}: {run['items_seen']} inzerátů, {run['items_new']} nových"
+              + (", s chybou, běží kontejner fb-mp-rss?" if run["errors"] else "") if run else "Feed zatím nebyl načten.")
+    return (
+        head + (f'<div class="flash bad">{e(error)}</div>' if error else "")
+        + f'<p class=muted>{e(status)} Celkem {count} inzerátů z Marketplace. Změny zapíše do {e(path)}, '
+        "fb-mp-rss je použije při další kontrole bez restartu.</p>"
+        '<form method=post action="/nastaveni/facebook"><div class=grid>'
+        '<div style="grid-column:1/-1"><label for=fb_urls>Adresy hledání</label>'
+        f'<textarea id=fb_urls name=urls>{e(chr(10).join(values.urls))}</textarea>'
+        '<div class=help>Jedna na řádek. Na Facebooku nastav lokalitu, okruh a hledání a zkopíruj adresu z prohlížeče. '
+        'Řazení a stáří se doplní samo podle voleb níže.</div></div>'
+        + input_field("keywords", "Klíčová slova v titulku", ", ".join(values.keywords),
+                      help_text="Oddělená čárkou, stačí jedno z nich. Prázdné = bez filtru.")
+        + input_field("refresh_minutes", "Kontrola každých (min)", values.refresh_minutes, "number",
+                      help_text=f"Nejméně {fbconfig.MIN_INTERVAL} minut, častěji hrozí blokace.",
+                      attrs=f"min={fbconfig.MIN_INTERVAL} step=1")
+        + select_field("days_since_listed", "Stáří inzerátů", fbconfig.DAY_CHOICES, values.days_since_listed,
+                       "Bez přihlášení je vidět jen první várka kolem 24 inzerátů, kratší okno pomáhá.")
+        + checkbox_field("sort_newest", "Řadit od nejnovějších", values.sort_newest,
+                         "Doporučeno, jinak Facebook řadí podle vlastního doporučení.")
+        + "</div><p><button>Uložit nastavení Facebooku</button></p></form></div>")
+
+
+def settings_facebook_save(ctx: Ctx) -> Response:
+    cfg = ctx.cfg
+    form = ctx.req.form
+    try:
+        minutes = int((form.get("refresh_minutes") or "0").strip())
+    except ValueError:
+        minutes = 0
+    submitted = fbconfig.FbSettings(
+        urls=[line.strip() for line in form.get("urls", "").splitlines() if line.strip()],
+        keywords=[word.strip() for word in form.get("keywords", "").split(",") if word.strip()],
+        refresh_minutes=minutes,
+        days_since_listed=form.get("days_since_listed", ""),
+        sort_newest=bool(form.get("sort_newest")),
+    )
+    if cfg.facebook.config_path is None:
+        return redirect("/nastaveni#facebook", "Cesta ke configu fb-mp-rss není nastavená.", "bad")
+    try:
+        fbconfig.save(cfg.facebook.config_path, submitted)
+    except (fbconfig.FbConfigError, OSError) as exc:
+        body = (f"<h1>Nastavení</h1>" + facebook_panel(ctx, cfg, submitted, f"Neuloženo: {exc}")
+                + '<p><a href="/nastaveni">Zpět na celé nastavení</a></p>')
+        return html_response(layout("Nastavení", "/nastaveni", body), 400)
+    return redirect("/nastaveni#facebook", "Nastavení Facebooku uloženo.")
 
 
 def settings_test_webhook(ctx: Ctx) -> Response:
@@ -845,6 +912,7 @@ ROUTES = [
     ("GET", "/nastaveni", settings_page),
     ("POST", "/nastaveni", settings_save),
     ("POST", "/nastaveni/test-webhook", settings_test_webhook),
+    ("POST", "/nastaveni/facebook", settings_facebook_save),
     ("GET", "/stav", status_page),
     ("GET", "/zdravi", health),
 ]
