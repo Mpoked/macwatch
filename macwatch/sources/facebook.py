@@ -48,7 +48,12 @@ def parse_feed(xml_text: str, fetched_at: datetime) -> list[RawListing]:
         if locality:
             locality = _COUNTRY_SUFFIX.sub("", locality)
         published = None
-        if pub := node.findtext("pubDate"):
+        if listed := fields.get("listed_at"):
+            try:
+                published = datetime.fromisoformat(listed)  # skutečný čas vložení na Facebooku
+            except ValueError:
+                log.debug("nečitelný čas vložení %r u %s", listed, link)
+        elif pub := node.findtext("pubDate"):
             try:
                 published = parsedate_to_datetime(pub)
             except (TypeError, ValueError):
@@ -57,7 +62,8 @@ def parse_feed(xml_text: str, fetched_at: datetime) -> list[RawListing]:
             source=SOURCE, source_id=match.group(1), url=link,
             title=(node.findtext("title") or "").strip(), price_raw=fields.get("price", ""),
             body=None, body_complete=False, fetched_at=fetched_at,
-            locality=locality, published_at=published))
+            locality=locality, published_at=published,
+            sold=fields.get("is_sold") == "true", reserved=fields.get("is_pending") == "true"))
     return items
 
 

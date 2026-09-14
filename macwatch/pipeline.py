@@ -62,7 +62,8 @@ def row_to_item(row: sqlite3.Row) -> RawListing:
         source=row["source"], source_id=row["source_id"], url=row["url"], title=row["title"],
         price_raw=row["price_raw"], body=row["body"], body_complete=bool(row["body_complete"]),
         fetched_at=datetime.fromisoformat(row["last_seen"]), category=row["category"],
-        locality=row["locality"], postal_code=row["postal_code"])
+        locality=row["locality"], postal_code=row["postal_code"],
+        reserved=row["status"] == "reserved")
 
 
 class Pipeline:
@@ -157,7 +158,7 @@ class Pipeline:
             alerted = row["alerted_at"] is not None
             # RSS nese zkrácený text, uložený plný text z detailu je lepší
             item = dataclasses.replace(item, title=row["title"], body=row["body"],
-                                       body_complete=complete, locality=row["locality"],
+                                       body_complete=complete, locality=row["locality"] or item.locality,
                                        postal_code=row["postal_code"])
 
         if source.supports_enrich and not complete:
@@ -178,6 +179,10 @@ class Pipeline:
             else:
                 log.debug("rozpočet detailů vyčerpán, %s počká na další průchod", item.url)
 
+        self.db.set_status(item.key, "reserved" if item.reserved else None, item.published_at)
+        if item.sold:
+            # prodaný kus je nejlepší tržní vzorek: zmizel s touto cenou
+            self.db.mark_gone(item.key, now, "prodáno")
         return self._assess_and_alert(item, price, source.supports_enrich, alerted, stats, now)
 
     def _assess_and_alert(self, item: RawListing, price: int | None, supports_enrich: bool,
@@ -187,6 +192,8 @@ class Pipeline:
         finding = Finding(item, price, specs, assessment)
         # bez plného textu nevíme o červených vlajkách, s upozorněním se počká
         ready = item.body_complete or not supports_enrich
+        if item.sold or item.reserved:
+            ready = False  # prodaný nebo rezervovaný kus nemá smysl pingat
         if assessment.should_alert and ready and not alerted and price is not None:
             finding.alerted = self._alert(finding, stats)
         return finding

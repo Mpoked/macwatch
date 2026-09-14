@@ -124,6 +124,12 @@ class Database:
                  item.postal_code, _iso(item.published_at), _iso(now), _iso(now)))
             self._record_price(item.key, price_czk, item.price_raw, now)
 
+    def set_status(self, key: tuple[str, str], status: str | None, published_at: datetime | None) -> None:
+        with self.conn:
+            self.conn.execute(
+                """UPDATE listings SET status = ?, published_at = COALESCE(?, published_at)
+                   WHERE source = ? AND source_id = ?""", (status, _iso(published_at), *key))
+
     def update_content(self, item: RawListing, now: datetime) -> None:
         """Doplní text a lokalitu, typicky po stažení detailu."""
         with self.conn:

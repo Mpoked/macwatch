@@ -131,6 +131,11 @@ Adresy hledání, klíčová slova, interval, stáří inzerátů a řazení se 
 načte před další kontrolou bez restartu. Cestu k souboru určuje `sources.facebook.config_path`
 v `config.json` macwatch.
 
+fb-mp-rss čte data z JSONu, který Facebook vkládá do stránky. Ve feedu je proto skutečný čas
+vložení, číselná cena, původní cena u zlevněných kusů a stav prodáno nebo rezervováno.
+Prodaný kus se zapíše jako zmizelý s cenou (vzorek pro referenční ceny Marketplace),
+rezervovaný se nepingne.
+
 Feed nemá popis inzerátu ani PSČ, jen město. Posouzení stojí na titulku a vzdálenost se počítá
 podle názvu obce.
 

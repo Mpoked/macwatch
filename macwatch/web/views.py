@@ -131,7 +131,8 @@ def post_button(action: str, label: str, hidden: dict[str, object], cls: str = "
 
 LISTING_SQL = """
 SELECT l.source, l.source_id, l.url, l.title, l.price_czk, l.price_raw, l.locality, l.first_seen,
-       l.last_seen, l.gone_at, l.alerted_at, l.body, l.postal_code, l.gone_reason,
+       l.last_seen, l.gone_at, l.alerted_at, l.body, l.postal_code, l.gone_reason, l.status,
+       COALESCE(l.published_at, l.first_seen) AS listed_at,
        a.eligible, a.family, a.chip, a.ram_gb, a.ssd_gb, a.year, a.battery_pct, a.cycles, a.is_dealer,
        a.red_flags, a.reference_czk, a.reference_origin, a.reference_samples,
        a.adjusted_reference_czk, a.target_czk, a.est_profit_czk, a.roi, a.score, a.verdict,
@@ -160,7 +161,9 @@ def listing_rows(rows: list[sqlite3.Row], now: datetime, next_url: str) -> list[
         if r["is_dealer"]:
             extra.append('<span class="badge muted">obchodník</span>')
         if r["gone_at"]:
-            extra.append('<span class="badge muted">zmizel</span>')
+            extra.append(f'<span class="badge muted">{e(r["gone_reason"] or "zmizel")}</span>')
+        if r["status"] == "reserved":
+            extra.append('<span class="badge warn">rezervováno</span>')
         distance = "·"
         if r["distance_km"] is not None:
             distance = f'{num(r["distance_km"])} km<br><span class=muted>{e(czk(r["travel_cost_czk"]))}</span>'
@@ -177,7 +180,7 @@ def listing_rows(rows: list[sqlite3.Row], now: datetime, next_url: str) -> list[
             distance,
             e(r["locality"] or "·"),
             source_label(r["source"]),
-            e(age(r["first_seen"], now)),
+            e(age(r["listed_at"], now)),
         ])
     return out
 
@@ -214,7 +217,7 @@ def findings(ctx: Ctx) -> Response:
         params.append(f"%{text}%")
     rows = ctx.db.conn.execute(
         LISTING_SQL + " WHERE " + " AND ".join(where) +
-        " ORDER BY a.score IS NULL, a.score DESC, l.first_seen DESC LIMIT 300", params).fetchall()
+        " ORDER BY a.score IS NULL, a.score DESC, listed_at DESC LIMIT 300", params).fetchall()
     here = url_with("/", show=show, source=source, km=max_km, q=text)
     filters = (
         '<form class=filters method=get action="/">'
@@ -264,6 +267,7 @@ def listing_detail(ctx: Ctx, source: str, source_id: str) -> Response:
         ("Rizika", ", ".join(json.loads(row["red_flags"] or "[]")) or "žádná"),
         ("Místo", f'{row["locality"] or "·"} {row["postal_code"] or ""}'),
         ("Zdroj", SOURCE_LABELS.get(source, source)),
+        ("Vloženo na zdroji", when(row["listed_at"]) if row["listed_at"] != row["first_seen"] else "neznámo"),
         ("Poprvé viděn", when(row["first_seen"])), ("Naposled viděn", when(row["last_seen"])),
         ("Zmizel", f'{when(row["gone_at"])} ({row["gone_reason"]})' if row["gone_at"] else "ne"),
         ("Upozornění odesláno", when(row["alerted_at"]) if row["alerted_at"] else "ne"))]
