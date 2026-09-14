@@ -83,6 +83,20 @@ journalctl --user -u macwatch -p warning   # jen varování a chyby
 
 Unity počítají s projektem v `~/Projects/macwatch`. Dashboard poslouchá na `127.0.0.1:8080`.
 
+### Dashboard z místní sítě
+
+Výchozí unit poslouchá jen na 127.0.0.1. Pro přístup z jiného počítače v místní síti
+(bez přihlášení, vidí ho každý v síti) přidej drop-in:
+
+```
+mkdir -p ~/.config/systemd/user/macwatch-web.service.d
+cp deploy/macwatch-web-lan.conf ~/.config/systemd/user/macwatch-web.service.d/lan.conf
+systemctl --user daemon-reload && systemctl --user restart macwatch-web
+```
+
+Server musí mít synchronizovaný čas (`timedatectl` ukáže `System clock synchronized: yes`),
+jinak se ukládají chybné časy inzerátů.
+
 ## Dashboard za Cloudflare Access
 
 Dashboard obsahuje obchodní data a nemá vlastní přihlašování. Nesmí být dostupný jinak než
