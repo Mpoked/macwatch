@@ -67,6 +67,11 @@ class TestDetail:
         assert "Prodejce" not in detail.body
         assert detail.body.startswith("Prodám lehce použitý MacBook.")
 
+    def test_redirect_away_from_detail_means_gone(self):
+        url = "https://pc.bazos.cz/inzerat/223774609/macbook-pro.php"
+        assert is_gone_page(200, "<html>výpis</html>", url, "https://pc.bazos.cz/inzeraty/macbook-pro/")
+        assert not is_gone_page(200, "<html></html>", url, url)
+
     def test_gone_page(self):
         assert is_gone_page(410, read_fixture("bazos", "gone_410.html"))
         assert not is_gone_page(200, read_fixture("bazos", "detail", "223774609.html"))
@@ -112,6 +117,13 @@ class TestSource:
         assert "Stav baterie" in enriched.body
         assert (enriched.locality, enriched.postal_code) == ("Praha 7", "17000")
         assert enriched.price_raw == "17 399 Kč"
+
+    def test_enrich_redirected_to_search_is_gone(self):
+        url = "https://pc.bazos.cz/inzerat/223774609/x.php"
+        source = self.make({url: Response("https://pc.bazos.cz/inzeraty/macbook-pro/", 200,
+                                          read_fixture("bazos", "search_page1.html"))})
+        with pytest.raises(ListingGone):
+            source.enrich(RawListing("bazos", "223774609", url, "MacBook", "1", "", False, NOW))
 
     def test_enrich_gone(self):
         url = "https://pc.bazos.cz/inzerat/1/x.php"

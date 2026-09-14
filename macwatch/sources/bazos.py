@@ -88,8 +88,19 @@ class DetailParseError(ValueError):
     pass
 
 
-def is_gone_page(status: int, page: str) -> bool:
-    return status in (404, 410) or any(marker in page for marker in _GONE_MARKERS)
+def is_gone_page(status: int, page: str, requested_url: str | None = None,
+                 final_url: str | None = None) -> bool:
+    """Smazaný inzerát: 404/410, hláška o smazání, nebo přesměrování pryč z detailu.
+
+    Prodaný a smazaný inzerát Bazoš přesměruje kódem 301 na výpis hledání,
+    např. /inzerat/223774609/... na /inzeraty/macbook-pro/.
+    """
+    if status in (404, 410) or any(marker in page for marker in _GONE_MARKERS):
+        return True
+    if requested_url and final_url:
+        wanted = listing_id(requested_url)
+        return wanted is not None and listing_id(final_url) != wanted
+    return False
 
 
 def parse_detail(page: str) -> Detail:
@@ -203,13 +214,13 @@ class BazosSource:
     def check_detail(self, url: str) -> Detail | None:
         """Detail inzerátu, nebo None, když už neexistuje."""
         response = self.client.get(url)
-        if is_gone_page(response.status, response.text):
+        if is_gone_page(response.status, response.text, url, response.url):
             return None
         return parse_detail(response.text)
 
     def enrich(self, item: RawListing) -> RawListing:
         response = self.client.get(item.url)
-        if is_gone_page(response.status, response.text):
+        if is_gone_page(response.status, response.text, item.url, response.url):
             raise ListingGone(item.url)
         detail = parse_detail(response.text)
         return replace(
