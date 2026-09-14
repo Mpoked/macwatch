@@ -118,7 +118,7 @@ class Service:
         self.db = db
         self.cfg = load_effective_config(config_path, db, _utcnow())
         self.client = PoliteClient(self.cfg.http)
-        self.notifier_url = ""
+        self.notifier_url: str | None = None  # None, ať se chybějící webhook ohlásí při startu
         self.notifier: DiscordNotifier | None = None
         self.pipeline = Pipeline(self.cfg, db, None, max_details=details, gazetteer=default_gazetteer())
         self._apply(self.cfg)
