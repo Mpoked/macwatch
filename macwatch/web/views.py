@@ -801,7 +801,7 @@ def facebook_panel(ctx: Ctx, cfg: AppConfig, submitted: fbconfig.FbSettings | No
     ).fetchone()
     count = ctx.db.conn.execute("SELECT COUNT(*) FROM listings WHERE source = 'facebook'").fetchone()[0]
     status = (f"Naposled načteno {when(run['started_at'])}: {run['items_seen']} inzerátů, {run['items_new']} nových"
-              + (", s chybou, běží kontejner fb-mp-rss?" if run["errors"] else "") if run else "Feed zatím nebyl načten.")
+              + (", s chybou, běží kontejner fb-mp-rss?" if run["errors"] else ".") if run else "Feed zatím nebyl načten.")
     return (
         head + (f'<div class="flash bad">{e(error)}</div>' if error else "")
         + f'<p class=muted>{e(status)} Celkem {count} inzerátů z Marketplace. Změny zapíše do {e(path)}, '

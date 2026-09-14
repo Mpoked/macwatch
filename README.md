@@ -126,6 +126,11 @@ a hledání „macbook“, zkopíruj adresu a přidej `sortBy=creation_time_desc
 ukáže jen první várku kolem 24 inzerátů, proto na řazení záleží. Filtr titulku:
 `"level1": ["macbook", "mac book"]`. Interval `refresh_interval_minutes` nech na 15.
 
+Adresy hledání, klíčová slova, interval, stáří inzerátů a řazení se dají měnit v dashboardu
+(Nastavení, sekce Facebook Marketplace). Dashboard zapíše `data/config.json` a fb-mp-rss ho
+načte před další kontrolou bez restartu. Cestu k souboru určuje `sources.facebook.config_path`
+v `config.json` macwatch.
+
 Feed nemá popis inzerátu ani PSČ, jen město. Posouzení stojí na titulku a vzdálenost se počítá
 podle názvu obce.
 
