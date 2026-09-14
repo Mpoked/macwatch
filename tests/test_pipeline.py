@@ -185,3 +185,46 @@ def test_reassess_active_picks_up_new_reference(cfg):
     stats = pipeline.reassess_active({"bazos"})
     assert db.conn.execute("SELECT verdict FROM assessments").fetchone()[0] == Verdict.KOUPIT
     assert stats.alerts_sent == 1 and len(notifier.sent) == 1
+
+
+def _clocked(cfg, notifier, start):
+    clock = {"now": start}
+    db = Database.open(":memory:")
+    pipeline = Pipeline(cfg, db, notifier, clock=lambda: clock["now"])
+    return pipeline, db, clock
+
+
+def test_old_bargain_is_not_pinged_when_webhook_comes_late(cfg):
+    from datetime import timedelta
+    pipeline, db, clock = _clocked(cfg, None, NOW)   # bez webhooku
+    old = dataclasses.replace(rss_item(), published_at=NOW)
+    pipeline.run_source(FakeSource([old]))
+    assert db.get_listing(("bazos", "1"))["alerted_at"] is None
+
+    clock["now"] = NOW + timedelta(hours=5)          # webhook přidán po pěti hodinách
+    notifier = FakeNotifier()
+    pipeline.notifier = notifier
+    pipeline.run_source(FakeSource([old]))
+    pipeline.reassess_active({"bazos"})
+    assert notifier.sent == [], "pět hodin starý kus už se nepingá"
+
+
+def test_price_drop_makes_old_listing_fresh_again(cfg):
+    from datetime import timedelta
+    notifier = FakeNotifier()
+    pipeline, db, clock = _clocked(cfg, notifier, NOW)
+    pipeline.run_source(FakeSource([dataclasses.replace(rss_item(price="9 000"), published_at=NOW)]))
+    clock["now"] = NOW + timedelta(hours=10)
+    pipeline.run_source(FakeSource([dataclasses.replace(rss_item(price="5 000"), published_at=NOW)]))
+    assert len(notifier.sent) == 1
+    assert "Zlevněno před 0 min" in notifier.sent[0]["description"]
+
+
+def test_age_limit_zero_means_no_limit(cfg):
+    from datetime import timedelta
+    cfg = dataclasses.replace(cfg, pricing=dataclasses.replace(cfg.pricing, alert_max_age_hours=0))
+    notifier = FakeNotifier()
+    pipeline, db, clock = _clocked(cfg, notifier, NOW + timedelta(days=2))
+    pipeline.run_source(FakeSource([dataclasses.replace(rss_item(), published_at=NOW)]))
+    assert len(notifier.sent) == 1
+    assert "Vloženo před" in notifier.sent[0]["description"]

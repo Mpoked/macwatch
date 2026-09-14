@@ -26,7 +26,10 @@ v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 5. Reference: v režimu `auto` medián cen inzerátů, které zmizely do 14 dnů (po skupinách
    zdroj + rodina + čip + SSD, s vlastními prodeji s vyšší váhou). Když vzorků není dost,
    ruční tabulka. Pro Marketplace bez vlastních dat se použije Bazoš.
-6. K ceně se připočte cesta: vzdálenost od domova po silnici krát spotřeba krát cena paliva,
+6. Pingne se jen inzerát mladší než `alert_max_age_hours` (výchozí 3 h), počítáno od vložení
+   nebo od posledního zlevnění. Starý výhodný kus zůstane v přehledu, ale nepřijde na Discord.
+   V upozornění je napsané, kdy byl kus vložen nebo zlevněn.
+7. K ceně se připočte cesta: vzdálenost od domova po silnici krát spotřeba krát cena paliva,
    tam i zpět. Cesta sníží zisk, ROI i verdikt. Kus dál než `max_km` se nepingne.
 
 | Verdikt | Kdy (cena včetně cesty) | Ping |

@@ -194,6 +194,32 @@ class Database:
                 "UPDATE listings SET alerted_at = ? WHERE source = ? AND source_id = ?",
                 (_iso(now), *key))
 
+    def freshness(self, key: tuple[str, str]) -> tuple[datetime | None, bool]:
+        """Od kdy je inzerát "čerstvý": vložení, nebo poslední změna ceny, co je později.
+
+        Vrací (čas, zda poslední událostí je zlevnění).
+        """
+        row = self.conn.execute(
+            """SELECT COALESCE(l.published_at, l.first_seen) AS listed,
+                      (SELECT observed_at FROM price_history ph WHERE ph.source = l.source
+                         AND ph.source_id = l.source_id ORDER BY id DESC LIMIT 1) AS last_change,
+                      (SELECT COUNT(*) FROM price_history ph WHERE ph.source = l.source
+                         AND ph.source_id = l.source_id) AS changes,
+                      (SELECT price_czk FROM price_history ph WHERE ph.source = l.source
+                         AND ph.source_id = l.source_id ORDER BY id DESC LIMIT 1 OFFSET 1) AS previous,
+                      l.price_czk
+               FROM listings l WHERE l.source = ? AND l.source_id = ?""", key).fetchone()
+        if row is None or row["listed"] is None:
+            return None, False
+        listed = datetime.fromisoformat(row["listed"])
+        dropped = (row["changes"] > 1 and row["previous"] is not None and row["price_czk"] is not None
+                   and row["price_czk"] < row["previous"])
+        if dropped and row["last_change"]:
+            changed = datetime.fromisoformat(row["last_change"])
+            if changed > listed:
+                return changed, True
+        return listed, False
+
     def price_history(self, key: tuple[str, str]) -> list[sqlite3.Row]:
         return self.conn.execute(
             """SELECT observed_at, price_czk, price_raw FROM price_history

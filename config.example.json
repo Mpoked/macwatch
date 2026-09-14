@@ -172,7 +172,8 @@
       "bazos|air|m1|256": 8900,
       "bazos|air|m1|512": 9800,
       "bazos|air|m1": 8900
-    }
+    },
+    "alert_max_age_hours": 3
   },
   "market": {
     "reference_mode": "auto",

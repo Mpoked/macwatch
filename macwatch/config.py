@@ -98,6 +98,7 @@ class PricingConfig:
     unknown_model_alert_below_czk: int
     fallback_source: str | None
     reference: dict[str, int] = field(default_factory=dict)
+    alert_max_age_hours: float = 3.0      # starší inzerát (od vložení nebo zlevnění) se nepingne, 0 = bez limitu
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +185,7 @@ def parse_pricing(data: dict[str, Any]) -> PricingConfig:
         battery_penalty_czk=int(data.get("battery_penalty_czk", 0)),
         alert_dealers=bool(data.get("alert_dealers", False)),
         unknown_model_alert_below_czk=int(data.get("unknown_model_alert_below_czk", 0)),
+        alert_max_age_hours=max(float(data.get("alert_max_age_hours", 3.0) or 0), 0.0),
         fallback_source=data.get("fallback_source"),
         reference={key.lower(): value for key, value in reference.items()},
     )

@@ -189,14 +189,28 @@ class Pipeline:
                           alerted: bool, stats: RunStats, now: datetime) -> Finding:
         specs, assessment = self.evaluate(item, price)
         self.db.save_assessment(item.key, specs, assessment, now)
+        fresh_since, dropped = self.db.freshness(item.key)
+        assessment = dataclasses.replace(assessment, fresh_since=fresh_since, price_dropped=dropped)
         finding = Finding(item, price, specs, assessment)
         # bez plného textu nevíme o červených vlajkách, s upozorněním se počká
         ready = item.body_complete or not supports_enrich
         if item.sold or item.reserved:
             ready = False  # prodaný nebo rezervovaný kus nemá smysl pingat
         if assessment.should_alert and ready and not alerted and price is not None:
-            finding.alerted = self._alert(finding, stats)
+            if self._too_old(fresh_since, now):
+                log.info("výhodný, ale starší než %s h, nepingám: %s", self.cfg.pricing.alert_max_age_hours,
+                         item.url)
+            else:
+                finding.alerted = self._alert(finding, stats)
         return finding
+
+    def _too_old(self, fresh_since: datetime | None, now: datetime) -> bool:
+        limit = self.cfg.pricing.alert_max_age_hours
+        if not limit or fresh_since is None:
+            return False
+        if fresh_since.tzinfo is None:
+            fresh_since = fresh_since.replace(tzinfo=timezone.utc)
+        return (now - fresh_since).total_seconds() > limit * 3600
 
     def reassess(self, key: tuple[str, str], supports_enrich: bool, stats: RunStats) -> Finding | None:
         """Znovu posoudí uložený inzerát, třeba po zlevnění zjištěném při kontrole cyklu."""
@@ -229,7 +243,7 @@ class Pipeline:
             return False
         embed = build_embed(source=finding.item.source, url=finding.item.url,
                             price_czk=finding.price_czk or 0, specs=finding.specs,
-                            assessment=finding.assessment)
+                            assessment=finding.assessment, now=self._now())
         if self.notifier.send(embed):
             self.db.mark_alerted(finding.item.key, self._now())
             stats.alerts_sent += 1

@@ -54,6 +54,8 @@ FIELDS: tuple[Field, ...] = (
     Field("pricing.battery_penalty_czk", "int", "Srážka za baterii (Kč)", "Posouzení"),
     Field("pricing.alert_dealers", "bool", "Posílat i obchodníky", "Posouzení"),
     Field("pricing.unknown_model_alert_below_czk", "int", "Pingnout neznámý model pod (Kč)", "Posouzení"),
+    Field("pricing.alert_max_age_hours", "float", "Pingnout jen inzeráty mladší než (h)", "Upozornění",
+          "Počítá se od vložení nebo od posledního zlevnění. 0 = bez omezení."),
 
     Field("market.reference_mode", "choice", "Referenční cena", "Trh",
           choices=(("auto", "Naměřená, když je dost vzorků, jinak ruční"), ("manual", "Jen ruční tabulka"))),

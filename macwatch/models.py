@@ -92,3 +92,5 @@ class Assessment:
     travel_cost_czk: int | None = None
     reference_samples: int | None = None
     locality_label: str | None = None
+    fresh_since: datetime | None = None   # vložení nebo zlevnění, pro upozornění
+    price_dropped: bool = False

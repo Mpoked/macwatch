@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any
 
 from macwatch.models import Assessment, Specs, Verdict
@@ -28,8 +29,20 @@ def format_czk(value: int) -> str:
     return f"{value:,}".replace(",", " ") + " Kč"
 
 
+def relative_age(moment: datetime, now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    minutes = max(int((now - moment).total_seconds() // 60), 0)
+    if minutes < 60:
+        return f"před {minutes} min"
+    if minutes < 48 * 60:
+        return f"před {minutes // 60} h {minutes % 60} min" if minutes < 6 * 60 else f"před {minutes // 60} h"
+    return f"před {minutes // 1440} dny"
+
+
 def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
-                assessment: Assessment) -> dict[str, Any]:
+                assessment: Assessment, now: datetime | None = None) -> dict[str, Any]:
     heading, color = _HEADINGS.get(assessment.verdict, (assessment.verdict, 0x95A5A6))
     parts = [f"Cena: **{format_czk(price_czk)}**"]
     if assessment.adjusted_reference_czk is not None:
@@ -44,6 +57,9 @@ def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
         place = f" ({assessment.locality_label})" if assessment.locality_label else ""
         lines.append(f"Vzdálenost: {assessment.distance_km:.0f} km{place} · "
                      f"cesta {format_czk(assessment.travel_cost_czk or 0)}")
+    if assessment.fresh_since is not None:
+        event = "Zlevněno" if assessment.price_dropped else "Vloženo"
+        lines.append(f"{event} {relative_age(assessment.fresh_since, now)}")
     origin = assessment.reference_origin or ""
     if origin.startswith("measured"):
         lines.append(f"Reference z {assessment.reference_samples} prodaných kusů")
