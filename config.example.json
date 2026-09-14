@@ -2,14 +2,12 @@
   "database": "macwatch.db",
   "poll_interval_seconds": 240,
   "discord_webhook_url": "",
-
   "http": {
     "user_agent": "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
     "min_delay_seconds": 4,
     "timeout_seconds": 20,
     "max_retries": 3
   },
-
   "sources": {
     "bazos": {
       "enabled": true,
@@ -17,37 +15,135 @@
         "https://www.bazos.cz/rss.php?rub=pc&hledat=macbook",
         "https://www.bazos.cz/rss.php?rub=pc&hledat=mac+book"
       ],
-      "max_details_per_poll": 25
+      "max_details_per_poll": 25,
+      "lifecycle_search_url": "https://pc.bazos.cz/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=&kitx=ne",
+      "lifecycle_interval_hours": 3,
+      "lifecycle_max_pages": 100,
+      "lifecycle_confirm_per_pass": 40
     },
     "facebook": {
       "enabled": true,
       "feed_url": "http://127.0.0.1:5000/rss"
     }
   },
-
   "parsing": {
-    "prefilter": ["mac\\s*-?\\s*book", "\\bmbp\\b", "\\bmba\\b"],
+    "prefilter": [
+      "mac\\s*-?\\s*book",
+      "\\bmbp\\b",
+      "\\bmba\\b"
+    ],
     "families": {
-      "air": ["mac\\s*-?\\s*book\\s*air", "\\bmba\\b"],
-      "pro": ["mac\\s*-?\\s*book\\s*pro", "\\bmbp\\b"]
+      "air": [
+        "mac\\s*-?\\s*book\\s*air",
+        "\\bmba\\b"
+      ],
+      "pro": [
+        "mac\\s*-?\\s*book\\s*pro",
+        "\\bmbp\\b"
+      ]
     },
     "family_words": {
-      "air": ["\\bair\\b"],
-      "pro": ["\\bpro\\b"]
+      "air": [
+        "\\bair\\b"
+      ],
+      "pro": [
+        "\\bpro\\b"
+      ]
     },
     "chip_pattern": "\\b(?:apple\\s*)?m\\s?([1-9])(?:\\s*-?\\s*(pro|max|ultra))?\\b",
     "min_chip_generation": 1,
     "min_year_without_chip": 2021,
-    "non_apple_cpu": ["\\bintel\\b", "\\bcore\\s*i[3579]\\b", "\\bi[3579]\\b", "\\bcore\\s*2\\b"],
-    "ram_values_gb": [8, 16, 18, 24, 32, 36, 48, 64, 96, 128],
-    "ssd_values_gb": [128, 256, 512, 1024, 2048, 4096, 8192],
-    "negations_before": ["ne", "neni", "nejsou", "nebyl", "nebyla", "nebylo", "nema", "nemaji", "bez", "zadny", "zadna", "zadne", "zadnou", "zadnych", "ani", "nikdy", "not", "no", "without"],
-    "negations_after": ["ne", "nema", "neni", "zadny", "zadne", "zadna", "no", "free", "off", "odhlasen", "odhlaseny", "odhlasena"],
+    "non_apple_cpu": [
+      "\\bintel\\b",
+      "\\bcore\\s*i[3579]\\b",
+      "\\bi[3579]\\b",
+      "\\bcore\\s*2\\b"
+    ],
+    "ram_values_gb": [
+      8,
+      16,
+      18,
+      24,
+      32,
+      36,
+      48,
+      64,
+      96,
+      128
+    ],
+    "ssd_values_gb": [
+      128,
+      256,
+      512,
+      1024,
+      2048,
+      4096,
+      8192
+    ],
+    "negations_before": [
+      "ne",
+      "neni",
+      "nejsou",
+      "nebyl",
+      "nebyla",
+      "nebylo",
+      "nema",
+      "nemaji",
+      "bez",
+      "zadny",
+      "zadna",
+      "zadne",
+      "zadnou",
+      "zadnych",
+      "ani",
+      "nikdy",
+      "not",
+      "no",
+      "without"
+    ],
+    "negations_after": [
+      "ne",
+      "nema",
+      "neni",
+      "zadny",
+      "zadne",
+      "zadna",
+      "no",
+      "free",
+      "off",
+      "odhlasen",
+      "odhlaseny",
+      "odhlasena"
+    ],
     "red_flags": {
-      "poskozeni": ["\\bpraskl\\w*", "\\brozbit\\w*", "\\bcar[ay]\\w*\\s+(?:pres|na)\\s+displej\\w*", "\\bpruh\\w*\\s+(?:pres|na)\\s+displej\\w*", "\\bvadn\\w*\\s+displej\\w*", "\\bposkozen\\w*\\s+displej\\w*", "\\bpolit\\w*", "\\bzatecen\\w*"],
-      "icloud": ["\\bicloud\\w*\\s*(?:zamek|zamk\\w*|lock\\w*|zamcen\\w*|blokac\\w*|blokovan\\w*)", "\\b(?:zamcen\\w*|blokovan\\w*)\\s+(?:na\\s+)?icloud\\w*", "\\bactivation\\s*lock", "\\baktivacn\\w*\\s+zamek"],
-      "mdm": ["\\bmdm\\b", "\\bremote\\s+management\\b", "\\bfiremni\\s+sprav\\w*"],
-      "na_dily": ["\\bna\\s+dily\\b", "\\bnefunkcn\\w*", "\\bnezapne\\b", "\\bnenabootuje\\b", "\\bfor\\s+parts\\b"]
+      "poskozeni": [
+        "\\bpraskl\\w*",
+        "\\brozbit\\w*",
+        "\\bcar[ay]\\w*\\s+(?:pres|na)\\s+displej\\w*",
+        "\\bpruh\\w*\\s+(?:pres|na)\\s+displej\\w*",
+        "\\bvadn\\w*\\s+displej\\w*",
+        "\\bposkozen\\w*\\s+displej\\w*",
+        "\\bpolit\\w*",
+        "\\bzatecen\\w*"
+      ],
+      "icloud": [
+        "\\bicloud\\w*\\s*(?:zamek|zamk\\w*|lock\\w*|zamcen\\w*|blokac\\w*|blokovan\\w*)",
+        "\\b(?:zamcen\\w*|blokovan\\w*)\\s+(?:na\\s+)?icloud\\w*",
+        "\\bactivation\\s*lock",
+        "\\baktivacn\\w*\\s+zamek"
+      ],
+      "mdm": [
+        "\\bmdm\\b",
+        "\\bremote\\s+management\\b",
+        "\\bfiremni\\s+sprav\\w*"
+      ],
+      "na_dily": [
+        "\\bna\\s+dily\\b",
+        "\\bnefunkcn\\w*",
+        "\\bnezapne\\b",
+        "\\bnenabootuje\\b",
+        "\\bfor\\s+parts\\b"
+      ]
     },
     "dealer": [
       "\\bkod\\s*:\\s*\\w*\\d\\w*",
@@ -62,10 +158,9 @@
       "\\bnase\\s+prodejn\\w*"
     ]
   },
-
   "pricing": {
     "buy_ratio": 0.65,
-    "watch_ratio": 0.80,
+    "watch_ratio": 0.8,
     "battery_min_pct": 85,
     "cycles_max": 500,
     "battery_penalty_czk": 1000,
@@ -77,5 +172,26 @@
       "bazos|air|m1|512": 9800,
       "bazos|air|m1": 8900
     }
+  },
+  "market": {
+    "reference_mode": "auto",
+    "sold_within_days": 14,
+    "lookback_days": 120,
+    "min_samples": 3,
+    "own_sale_weight": 3
+  },
+  "travel": {
+    "enabled": true,
+    "home_psc": "65605",
+    "unlimited": false,
+    "max_km": 150,
+    "consumption_l_per_100km": 6.5,
+    "fuel_price_czk_per_l": 38.0,
+    "extra_czk_per_km": 0,
+    "road_factor": 1.3,
+    "round_trip": true
+  },
+  "inventory": {
+    "capital_cap_czk": 0
   }
 }

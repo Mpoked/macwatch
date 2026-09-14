@@ -17,6 +17,7 @@ include = ["macwatch*"]
 
 [tool.setuptools.package-data]
 "macwatch.migrations" = ["*.sql"]
+"macwatch.data" = ["*.tsv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

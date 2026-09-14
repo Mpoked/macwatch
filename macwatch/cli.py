@@ -8,11 +8,15 @@ import random
 import signal
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 from macwatch import __version__, logging_setup
 from macwatch.config import AppConfig, ConfigError, load_config
 from macwatch.db import Database
+from macwatch.geo import default_gazetteer
+from macwatch.lifecycle import BazosLifecycle
+from macwatch.settings import load_effective_config
 from macwatch.models import Verdict
 from macwatch.notify import DiscordNotifier, format_czk
 from macwatch.pipeline import Finding, Pipeline
@@ -27,8 +31,8 @@ _VERDICT_ORDER = {Verdict.KOUPIT: 0, Verdict.KOUPIT_S_RIZIKEM: 1, Verdict.NEZNAM
                   Verdict.SLEDOVAT: 3, Verdict.NEVYPLATI_SE: 4, Verdict.BEZ_CENY: 5}
 
 
-def build_sources(cfg: AppConfig) -> list[Source]:
-    client = PoliteClient(cfg.http)
+def build_sources(cfg: AppConfig, client: PoliteClient | None = None) -> list[Source]:
+    client = client or PoliteClient(cfg.http)
     sources: list[Source] = []
     if cfg.bazos.enabled:
         sources.append(BazosSource(cfg.bazos, client))
@@ -46,6 +50,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                       help="jeden průchod do paměti, nic neuloží ani neodešle, vypíše nálezy")
     mode.add_argument("--once", action="store_true", help="jeden ostrý průchod a konec")
     mode.add_argument("--migrate", action="store_true", help="jen aplikovat migrace databáze")
+    mode.add_argument("--web", action="store_true", help="spustit webový dashboard")
+    mode.add_argument("--lifecycle", action="store_true",
+                      help="hned spustit kontrolu životního cyklu na Bazoši a skončit")
+    parser.add_argument("--host", default="127.0.0.1", help="adresa dashboardu (výchozí 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8080, help="port dashboardu (výchozí 8080)")
     parser.add_argument("--details", type=int, default=None,
                         help="kolik detailů stáhnout za průchod (výchozí podle configu, "
                              "při --dry-run 10)")
@@ -69,6 +78,8 @@ def format_finding(f: Finding) -> str:
         parts.append(f"ref {format_czk(a.adjusted_reference_czk)}")
     if a.est_profit_czk is not None and a.roi is not None:
         parts.append(f"zisk {a.est_profit_czk:+} Kč, ROI {a.roi * 100:.0f} %")
+    if a.distance_km is not None:
+        parts.append(f"{a.distance_km:.0f} km, cesta {a.travel_cost_czk} Kč")
     if a.notes:
         parts.append("(" + "; ".join(a.notes) + ")")
     if not f.item.body_complete and f.item.body is not None:  # Facebook popis nemá vůbec
@@ -79,7 +90,8 @@ def format_finding(f: Finding) -> str:
 
 def run_dry(cfg: AppConfig, details: int | None) -> int:
     db = Database.open(":memory:")
-    pipeline = Pipeline(cfg, db, notifier=None, max_details=10 if details is None else details)
+    pipeline = Pipeline(cfg, db, notifier=None, max_details=10 if details is None else details,
+                        gazetteer=default_gazetteer())
     all_findings: list[Finding] = []
     errors = 0
     for source in build_sources(cfg):
@@ -94,16 +106,62 @@ def run_dry(cfg: AppConfig, details: int | None) -> int:
     return 1 if errors and not all_findings else 0
 
 
-def run_service(cfg: AppConfig, *, once: bool, details: int | None) -> int:
-    db = Database.open(cfg.database)
-    notifier = DiscordNotifier(cfg.discord_webhook_url) if cfg.discord_webhook_url else None
-    if notifier is None:
-        log.warning("discord_webhook_url není nastavený, upozornění se nebudou posílat")
-    pipeline = Pipeline(cfg, db, notifier, max_details=details)
-    sources = build_sources(cfg)
-    if not sources:
-        log.error("žádný zdroj není zapnutý")
-        return 2
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Service:
+    """Dlouho běžící služba. Nastavení z dashboardu se projeví při dalším průchodu."""
+
+    def __init__(self, config_path: Path, db: Database, details: int | None) -> None:
+        self.config_path = config_path
+        self.db = db
+        self.cfg = load_effective_config(config_path, db, _utcnow())
+        self.client = PoliteClient(self.cfg.http)
+        self.notifier_url = ""
+        self.notifier: DiscordNotifier | None = None
+        self.pipeline = Pipeline(self.cfg, db, None, max_details=details, gazetteer=default_gazetteer())
+        self._apply(self.cfg)
+
+    def _apply(self, cfg: AppConfig) -> None:
+        self.cfg = cfg
+        self.client.cfg = cfg.http
+        if cfg.discord_webhook_url != self.notifier_url:
+            self.notifier_url = cfg.discord_webhook_url
+            self.notifier = DiscordNotifier(cfg.discord_webhook_url) if cfg.discord_webhook_url else None
+            if self.notifier is None:
+                log.warning("Discord webhook není nastavený, upozornění se nebudou posílat")
+        self.pipeline.notifier = self.notifier
+        self.pipeline.refresh(cfg)
+
+    def reload(self) -> None:
+        try:
+            self._apply(load_effective_config(self.config_path, self.db, _utcnow()))
+        except ConfigError as exc:
+            log.error("nové nastavení je neplatné, jedu se starým: %s", exc)
+
+    def run_once(self, stop: threading.Event | None = None, lifecycle: str = "auto") -> None:
+        sources = build_sources(self.cfg, self.client)
+        if not sources:
+            log.error("žádný zdroj není zapnutý")
+        for source in sources:
+            if stop is not None and stop.is_set():
+                return
+            self.pipeline.run_source(source)
+        self.pipeline.refresh()
+        self.pipeline.reassess_active({s.name for s in sources if s.supports_enrich})
+        bazos = next((s for s in sources if isinstance(s, BazosSource)), None)
+        if bazos is None or lifecycle == "never":
+            return
+        checker = BazosLifecycle(bazos, self.db, self.pipeline, _utcnow)
+        if lifecycle == "force" or checker.due():
+            checker.run()
+
+
+def run_service(config_path: Path, *, once: bool, details: int | None) -> int:
+    base = load_config(config_path)
+    db = Database.open(base.database)
+    service = Service(config_path, db, details)
 
     stop = threading.Event()
 
@@ -115,18 +173,15 @@ def run_service(cfg: AppConfig, *, once: bool, details: int | None) -> int:
     signal.signal(signal.SIGINT, _terminate)
 
     log.info("macwatch %s běží, databáze %s, interval %d s",
-             __version__, cfg.database, cfg.poll_interval_seconds)
+             __version__, base.database, service.cfg.poll_interval_seconds)
     try:
         while not stop.is_set():
-            for source in sources:
-                if stop.is_set():
-                    break
-                pipeline.run_source(source)
+            service.run_once(stop)
             if once:
                 break
             # rozptyl, ať požadavky nechodí v přesně stejném rytmu
-            wait = cfg.poll_interval_seconds * random.uniform(0.85, 1.15)
-            stop.wait(wait)
+            stop.wait(service.cfg.poll_interval_seconds * random.uniform(0.85, 1.15))
+            service.reload()
     finally:
         db.close()
     return 0
@@ -145,12 +200,29 @@ def main(argv: list[str] | None = None) -> int:
         log.error("%s", exc)
         return 2
     if args.dry_run:
+        if cfg.database.exists():
+            # zkušební běh respektuje nastavení z dashboardu, ale nic nezapíše
+            db = Database.open(cfg.database)
+            try:
+                cfg = load_effective_config(args.config, db, _utcnow())
+            finally:
+                db.close()
         return run_dry(cfg, args.details)
     if args.migrate:
         Database.open(cfg.database).close()
         log.info("databáze %s je aktuální", cfg.database)
         return 0
-    return run_service(cfg, once=args.once, details=args.details)
+    if args.web:
+        from macwatch.web.server import serve
+        return serve(args.config, cfg, args.host, args.port)
+    if args.lifecycle:
+        db = Database.open(cfg.database)
+        try:
+            Service(args.config, db, args.details).run_once(lifecycle="force")
+        finally:
+            db.close()
+        return 0
+    return run_service(args.config, once=args.once, details=args.details)
 
 
 if __name__ == "__main__":

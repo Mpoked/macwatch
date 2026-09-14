@@ -40,8 +40,15 @@ def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
     lines = [" · ".join(parts)]
     if specs.red_flags:
         lines.append("Riziko: " + ", ".join(specs.red_flags).replace("_", " "))
-    if assessment.reference_origin and assessment.reference_origin.startswith("config:"):
-        other = assessment.reference_origin.split(":", 1)[1]
+    if assessment.distance_km is not None:
+        place = f" ({assessment.locality_label})" if assessment.locality_label else ""
+        lines.append(f"Vzdálenost: {assessment.distance_km:.0f} km{place} · "
+                     f"cesta {format_czk(assessment.travel_cost_czk or 0)}")
+    origin = assessment.reference_origin or ""
+    if origin.startswith("measured"):
+        lines.append(f"Reference z {assessment.reference_samples} prodaných kusů")
+    if ":" in origin:
+        other = origin.split(":", 1)[1]
         lines.append(f"Reference převzatá z {_SOURCE_GENITIVE.get(other, other)}")
     return {
         "title": f"{heading}: {specs.model_label()}"[:256],

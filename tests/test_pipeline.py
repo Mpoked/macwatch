@@ -154,3 +154,34 @@ def test_price_changed():
     assert price_changed(17399, "17 399", 16000, "16 000")
     assert not price_changed(None, "Dohodou", None, "dohodou")
     assert price_changed(None, "Dohodou", 9000, "9 000")
+
+
+def test_distance_and_travel_cost_are_stored(cfg):
+    from macwatch.geo import default_gazetteer
+
+    import dataclasses as dc
+    cfg = dc.replace(cfg, travel=dc.replace(cfg.travel, home_psc="68601", max_km=None))
+    db = Database.open(":memory:")
+    pipeline = Pipeline(cfg, db, None, clock=lambda: NOW, gazetteer=default_gazetteer())
+    source = FakeSource([rss_item()])  # detail doplní Brno, PSČ 60200
+    findings, _ = pipeline.run_source(source)
+    a = findings[0].assessment
+    assert 60 < a.distance_km < 110
+    assert a.travel_cost_czk > 0
+    row = db.conn.execute("SELECT distance_km, travel_cost_czk FROM assessments").fetchone()
+    assert row["distance_km"] == a.distance_km
+
+
+def test_reassess_active_picks_up_new_reference(cfg):
+    import dataclasses as dc
+    notifier = FakeNotifier()
+    pipeline, db = make(cfg, notifier)
+    pipeline.run_source(FakeSource([rss_item(title="MacBook Pro M3 Max 36/1TB", price="30 000")]))
+    assert notifier.sent == []
+    assert db.conn.execute("SELECT verdict FROM assessments").fetchone()[0] == Verdict.NEZNAMY_MODEL
+
+    reference = {**cfg.pricing.reference, "bazos|pro|m3 max": 60000}
+    pipeline.refresh(dc.replace(cfg, pricing=dc.replace(cfg.pricing, reference=reference)))
+    stats = pipeline.reassess_active({"bazos"})
+    assert db.conn.execute("SELECT verdict FROM assessments").fetchone()[0] == Verdict.KOUPIT
+    assert stats.alerts_sent == 1 and len(notifier.sent) == 1

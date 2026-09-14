@@ -86,3 +86,7 @@ class Assessment:
     roi: float | None = None
     score: float | None = None
     notes: tuple[str, ...] = field(default=())
+    distance_km: float | None = None
+    travel_cost_czk: int | None = None
+    reference_samples: int | None = None
+    locality_label: str | None = None

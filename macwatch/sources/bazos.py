@@ -109,6 +109,58 @@ def parse_detail(page: str) -> Detail:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SearchHit:
+    source_id: str
+    url: str
+    title: str
+    price_raw: str
+    locality: str | None
+    postal_code: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SearchPage:
+    total: int | None
+    first: int | None
+    last: int | None
+    hits: list[SearchHit]
+
+
+_SEARCH_COUNT = re.compile(r"Zobrazeno\s+([\d\s]+)-([\d\s]+)\s+inzerátů\s+z\s+([\d\s]+)")
+_SEARCH_TITLE = re.compile(r'<h2 class=nadpis><a href="(/inzerat/(\d+)/[^"]*)">(.*?)</a>', re.S)
+_SEARCH_PRICE = re.compile(r'class="inzeratycena"><b>(.*?)</b>', re.S)
+_SEARCH_PLACE = re.compile(r'class="inzeratylok">([^<]*)<br>\s*([\d ]{5,6})')
+
+
+def _int(text: str) -> int:
+    return int(re.sub(r"\s", "", text))
+
+
+def parse_search_page(page: str, base_url: str = "https://pc.bazos.cz") -> SearchPage:
+    """Stránka výsledků hledání: počty a inzeráty s cenou a lokalitou."""
+    count = _SEARCH_COUNT.search(page)
+    hits = []
+    seen = set()
+    for block in page.split('<div class="inzeraty inzeratyflex">')[1:]:
+        title = _SEARCH_TITLE.search(block)
+        if not title or title.group(2) in seen:
+            continue
+        seen.add(title.group(2))
+        price = _SEARCH_PRICE.search(block)
+        place = _SEARCH_PLACE.search(block)
+        hits.append(SearchHit(
+            source_id=title.group(2),
+            url=base_url.rstrip("/") + title.group(1),
+            title=html_to_text(title.group(3)),
+            price_raw=html_to_text(price.group(1)) if price else "",
+            locality=html.unescape(place.group(1)).strip() if place else None,
+            postal_code=place.group(2).replace(" ", "") if place else None))
+    if count:
+        return SearchPage(_int(count.group(3)), _int(count.group(1)), _int(count.group(2)), hits)
+    return SearchPage(None, None, None, hits)
+
+
 class BazosSource:
     name = SOURCE
     supports_enrich = True
@@ -136,6 +188,24 @@ class BazosSource:
                 if item.source_id not in seen:
                     seen.add(item.source_id)
                     yield item
+
+    def search_page(self, offset: int) -> SearchPage:
+        base = self.cfg.lifecycle_search_url
+        separator = "&" if "?" in base else "?"
+        url = re.sub(r"([?&])crp=\d*&?", r"\1", base).rstrip("&?")
+        url = f"{url}{'&' if '?' in url else separator}crp={offset}"
+        response = self.client.get(url)
+        if response.status != 200:
+            raise ValueError(f"stránka hledání {url} vrátila HTTP {response.status}")
+        origin = re.match(r"https?://[^/]+", url)
+        return parse_search_page(response.text, origin.group(0) if origin else "https://pc.bazos.cz")
+
+    def check_detail(self, url: str) -> Detail | None:
+        """Detail inzerátu, nebo None, když už neexistuje."""
+        response = self.client.get(url)
+        if is_gone_page(response.status, response.text):
+            return None
+        return parse_detail(response.text)
 
     def enrich(self, item: RawListing) -> RawListing:
         response = self.client.get(item.url)

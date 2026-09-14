@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<title>Macbook bazar - PC - strana 73 | Bazoš.cz</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="description" content="PC - Macbook bazar. Vybírejte z 1 450 inzerátů. Prodej snadno a rychle na Bazoši. Přes půl milionů uživatelů za den - strana 73."><meta property="og:title" content="Macbook bazar - PC">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bazos.cz">
+<meta property="og:description" content="PC - Macbook bazar. Vybírejte z 1 450 inzerátů. Prodej snadno a rychle na Bazoši. Přes půl milionů uživatelů za den - strana 73.">
+<link rel="canonical" href="https://pc.bazos.cz/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=&crp=1440&kitx=ne"><meta property="fb:admins" content="1055875657">
+<meta name="ROBOTS" content="NOINDEX">
+<link rel="stylesheet" href="https://www.bazos.cz/bazos67s.css" type="text/css"><link rel="preload" as="image" href="https://www.bazos.cz/obrazky/bazos.svg">
+<link rel="stylesheet" href="https://www.bazos.cz/bazosprint.css" type="text/css" media="print">
+<link rel="icon" href="https://www.bazos.cz/favicon.svg" type="image/svg+xml">
+<link rel="icon" HREF="https://www.bazos.cz/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="https://www.bazos.cz/apple-touch-icon.png">
+<script async="async" src="https://www.google.com/adsense/search/ads.js"></script>
+<script type="text/javascript" charset="utf-8">
+(function(g,o){g[o]=g[o]||function(){(g[o]['q']=g[o]['q']||[]).push(
+  arguments)},g[o]['t']=1*new Date})(window,'_googCsa');
+</script><script>
+var xhr = new XMLHttpRequest();
+var naseptavac_value = '';
+function naseptavac(value) {
+  if (value=='')  {
+  	naseptavac_value = '';
+  	document.getElementById('vysledek').innerHTML='';
+  	}
+else {
+	if (naseptavac_value == value) {
+		return false;
+	}
+	naseptavac_value = value;
+	setTimeout(function () {
+		if (naseptavac_value != value) {
+			return false;
+		}
+		xhr.onreadystatechange = function() {
+ 		 if (this.readyState == 4 && naseptavac_value == value){
+				document.getElementById('vysledek').innerHTML = this.responseText;
+			}
+ 		 };
+		xhr.open("POST", '/suggest.php');
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.send('rubnas=PC&catnas=&qnas='+encodeURIComponent(naseptavac_value));
+	}, 250);
+}
+}
+
+var naseptavacpsc_value = '';
+function naseptavacpsc(value) {
+  if (value=='')  {
+  	naseptavacpsc_value = '';
+  	document.getElementById('vysledekpsc').innerHTML='<table cellpadding=\"3\" cellspacing=\"0\" class=\"tablenaspsc\"><tr><td class=\"act\" onclick=\"getLocation();\"><b>Inzeráty v okolí</b></td></tr></table>';
+  	}
+else {
+	if (naseptavacpsc_value == value) {
+		return false;
+	}
+	naseptavacpsc_value = value;
+	setTimeout(function () {
+		if (naseptavacpsc_value != value) {
+			return false;
+		}
+		xhr.onreadystatechange = function() {
+ 		 if (this.readyState == 4 && naseptavacpsc_value == value){
+				document.getElementById('vysledekpsc').innerHTML = this.responseText;
+			}
+ 		 };
+		xhr.open("POST", '/suggestpsc.php');
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.send('qnaspsc='+encodeURIComponent(naseptavacpsc_value));
+	}, 250);
+}
+}
+
+function getLocation() {
+if (navigator.geolocation) {navigator.geolocation.getCurrentPosition(showPosition);}
+else {document.getElementById('hlokalita').value = '';}
+}
+function showPosition(position) {
+		xhr.onreadystatechange = function() {
+ 		 if (this.readyState == 4){
+				document.getElementById('hlokalita').value = this.responseText;
+				document.forms['formt'].submit();
+			}
+ 		 };
+		xhr.open("POST", '/zip.php');
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.send('latitude='+encodeURIComponent(position.coords.latitude)+'&longitude='+encodeURIComponent(position.coords.longitude));
+}
+
+var agent_value = '';
+function agentclick() {
+  if (document.getElementById('agentmail').value=='')  {
+  	document.getElementById("agentmail").focus();
+    return false;
+  	}
+else {
+agent_value = document.getElementById('agentmail').value;
+xhr.onreadystatechange = function() {
+  if (this.readyState == 4){
+				document.getElementById('overlay').innerHTML = this.responseText;
+			}
+  };
+xhr.open("POST", '/agent.php');
+xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+xhr.send('hledat=macbook&rubrikav=PC&hlokalita=&humkreis=25&cenaod=&cenado=&cat=&typ=&agentmail='+encodeURIComponent(agent_value));
+}
+}
+
+function odeslatrequest(value,params) {
+xhr.onreadystatechange = function() {
+  if (this.readyState == 4){
+				document.getElementById('overlay').innerHTML = this.responseText;
+			}
+  };
+xhr.open("POST", value);
+xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+xhr.send(params);
+}
+function overlay() {
+	el = document.getElementById("overlay");
+	el.style.display = (el.style.display == "inline") ? "none" : "inline";
+}
+function odeslatakci(postaction,value1,value2,value3) {
+document.getElementById('postaction').value = postaction;
+document.getElementById("postv1").value = value1;
+document.getElementById("postv2").value = value2;
+document.getElementById("postv3").value = value3;
+document.formaction.submit();
+}
+</script>
+</head>
+
+<body>
+
+
+<div class="sirka">
+<div class="listalogor">
+<div class="listalogol"><a href="https://www.bazos.cz/" title="Bazos.cz - Inzerce, bazar"><img src="https://www.bazos.cz/obrazky/bazos.svg" width="199" height="34" alt="Bazos.cz - Inzerce, inzeráty"></a></div>
+<div class="listalogom"><b>... bazar pro každého</b></div>
+<div class="listalogop"><a href="https://www.bazos.cz/oblibene.php"><b>Oblíbené inzeráty</b></a> <a href="https://www.bazos.cz/moje-inzeraty.php"><b>Moje inzeráty</b></a> <a href="/pridat-inzerat.php"><b><span class=pridati>Přidat inzerát</span></b></a></div>
+</div>
+<form name="formt" id="formt" method=get >
+<div class="listah">
+<div class="rubriky">
+<b>
+Co: <span class=vysokoli><span id="vysledek"></span><input type="search" onkeyup="naseptavac(this.value);" id=hledat name=hledat size="17" maxlength="256" value="macbook" autocomplete="off" title="Co? Vyhledávaný výraz"></span>
+
+<select name="rubriky" onchange='this.form.submit();' title="Vyber rubriku">
+<option value="www">Všechny rubriky</option>
+<option value="auto">Auto</option><option value="deti">Děti</option><option value="dum">Dům a zahrada</option><option value="elektro">Elektro</option><option value="foto">Foto</option><option value="hudba">Hudba</option><option value="knihy">Knihy</option><option value="mobil">Mobily</option><option value="motorky">Motorky</option><option value="nabytek">Nábytek</option><option value="obleceni">Oblečení</option><option value="pc" selected>PC</option><option value="prace">Práce</option><option value="reality">Reality</option><option value="sluzby">Služby</option><option value="sport">Sport</option><option value="stroje">Stroje</option><option value="vstupenky">Vstupenky</option><option value="zvirata">Zvířata</option><option value="ostatni">Ostatní</option></select>
+
+Lokalita: <span class=vysokolipsc><span id="vysledekpsc"></span><input type="search" name="hlokalita" id="hlokalita" onkeyup="naseptavacpsc(this.value);" onclick="naseptavacpsc(this.value);" value="" size="4" maxlength="25" autocomplete="off" title="Kde? PSČ (místo)" style="-webkit-appearance: none;"></span>
+Okolí: <input name="humkreis" title="Okolí v km" value="25" size="3" style="width: 25px;"> km
+Cena od: <input name=cenaod title="Cena od Kč" maxlength="12" size="5" value=""> - do: <input name=cenado title="Cena do Kč" maxlength="12" size="5" value=""> Kč <input type="submit" name="Submit" value="Hledat">
+<input type="hidden" name="order" id="order"><input type="hidden" name="crp" id="crp"><input type="hidden" id="kitx" name="kitx" value="ano"></b>
+</div>
+</div>
+</form>
+<div class="drobky"><a href="https://www.bazos.cz/" title="Inzerce Bazoš">Hlavní stránka</a>  > <a href="https://pc.bazos.cz">PC</a> > <h1 class="nadpiskategorie">macbook</h1></div>
+<br>
+
+
+<div class="flexmain"><div class="menuleft"><div class="nadpismenu">Kategorie</div>
+<div class="barvalmenu">
+<div class="barvaleva">
+<a href="/cd/" >DVD, Blu-ray mechaniky</a>
+<a href="https://foto.bazos.cz/">Fotoaparáty</a>
+<a href="/gps/" >GPS navigace</a>
+<a href="/graficka/" >Grafické karty</a>
+<a href="/hdd/" >Hard disky, SSD</a>
+<a href="/playstation/" >Herní konzole</a>
+<a href="/volanty/" >Herní zařízení</a>
+<a href="/hry/" >Hry</a>
+<a href="/chladic/" >Chladiče</a>
+<a href="/klavesnice/" >Klávesnice</a>
+<a href="/kopirka/" >Kopírovací stroje</a>
+<a href="/monitor/" >LCD monitory</a>
+<a href="https://mobil.bazos.cz/">Mobilní telefony</a>
+<a href="/modem/" >Modemy</a>
+<a href="/mys/" >Myši</a>
+<a href="/notebook/" >Notebooky</a>
+<a href="/pamet/" >Paměti</a>
+<a href="/pc/" >PC, Počítače</a>
+<a href="/procesor/" >Procesory</a>
+<a href="/sit/" >Síťové prvky</a>
+<a href="/scaner/" >Scanery</a>
+<a href="/case/" >Skříně, zdroje</a>
+<a href="/software/" >Software</a>
+<a href="/spotrebni/" >Spotřební materiál</a>
+<a href="/tablet/" >Tablety, E-čtečky</a>
+<a href="/tiskarna/" >Tiskárny</a>
+<a href="/wifi/" >Wireless, WiFi</a>
+<a href="/motherboard/" >Základní desky</a>
+<a href="/ups/" >Záložní zdroje</a>
+<a href="/sound/" >Zvukové karty</a>
+<a href="/ostatni/" >Ostatní</a>
+</div></div>
+
+</div><div class="maincontent">
+
+
+<div class="listainzerat inzeratyflex">
+<div class="inzeratynadpis"><img src="https://www.bazos.cz/obrazky/list.gif" width="18" height="16" alt="List inzerátů" class=gallerylista> <form name="formgal" id="formgal" method="post" style="display: inline;"><input type="hidden" name="gal" value="g"><input type="image" alt="Submit" src="https://www.bazos.cz/obrazky/gallery.gif" width="18" height="16" class="gallerylist inputgal"></form> Zobrazeno 1441-1450 inzerátů z 1 450</div>
+<div class="inzeratycena"><b><span onclick="document.getElementById('order').value=1;document.forms['formt'].submit();" class="paction">Cena</span></b></div>
+<div class="inzeratylok">Lokalita</div>
+<div class="inzeratyview"><span onclick="document.getElementById('order').value=3;document.forms['formt'].submit();" class="paction">Zobrazeno</span></div>
+</div><form name="formaction" method="post" style="display: inline;"><input type="hidden" id="postaction" name="postaction" value=""><input type="hidden" id="postv1" name="postv1" value=""><input type="hidden" id="postv2" name="postv2" value=""><input type="hidden" id="postv3" name="postv3" value=""></form><button type="button" onclick="odeslatrequest('/agent.php','teloverit=');overlay();">Nové inzeráty e-mailem</button>
+	<div id="overlay">
+     <div></div>
+</div>
+
+<div id="container_one"></div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221389428/apple-macbook-pro-13-early-2015-8-gb-ram-256-gb-ssd.php"><img src="https://www.bazos.cz/img/1t/428/221389428.jpg?t=1784318044" class="obrazek" alt="Apple MacBook Pro 13 Early 2015 - 8 GB RAM / 256 GB SSD" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221389428/apple-macbook-pro-13-early-2015-8-gb-ram-256-gb-ssd.php">Apple MacBook Pro 13 Early 2015 - 8 GB RAM / 256 GB SSD</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Prodám Apple <b>macbook</b> Pro 13 Early 2015.
+
+Parametry :
+8 GB RAM
+256 GB SSD
+13 Retina Displej
+procesor i5
+
+<b>macbook</b> je jinak plně funkční. Funguje displej, klávesnice, trackpad, USB porty i ostatní funkce.
+
+Nefungují vestavěné reproduktory.
+
+ ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  3 990 Kč</span></b></div>
+<div class="inzeratylok">Ústí nad Labem<br>400 11</div>
+<div class="inzeratyview">167 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221389428');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221389428');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221389428');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221386410/macbook-air-17-13-inch-128-gb.php"><img src="https://www.bazos.cz/img/1t/410/221386410.jpg" class="obrazek" alt="MacBook Air 17 13 inch 128 gb" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221386410/macbook-air-17-13-inch-128-gb.php">MacBook Air 17 13 inch 128 gb</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Prodám mackbook air, je jako nový, bez škrábnutí, koupila jsem ho v roce 2018 a dohromady jsem ho používala tak rok a to jen na filmy. Nechám ho za 3 tisíce. Osobní předání, Praha, Česká Lípa a okolí a Litoměřice a okolí.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  3 000 Kč</span></b></div>
+<div class="inzeratylok">Praha 1<br>110 00</div>
+<div class="inzeratyview">1252 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221386410');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221386410');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221386410');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221379643/macbook-pro-14-m1-pro-2021.php"><img src="https://www.bazos.cz/img/1t/643/221379643.jpg" class="obrazek" alt="MacBook PRO 14” M1 PRO 2021" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221379643/macbook-pro-14-m1-pro-2021.php">MacBook PRO 14” M1 PRO 2021</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Dobrý den, 
+Prodám <b>macbook</b> PRO 14” v perfektním stavu. Je prakticky úplně nový a skoro nepoužívaný 
+
+Specifikace:
+M1 PRO
+16 GB RAM
+512 GB SSD
+99% kondice baterie 
+
+Jsme prodejna na Praze 2 a tudíž od nás dostanete kupní doklad, záruku 12 měsíců a 30  ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  18 900 Kč</span></b></div>
+<div class="inzeratylok">Praha 2<br>120 00</div>
+<div class="inzeratyview">102 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221379643');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221379643');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221379643');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221379015/koupim-krabici-od-macbook-pro-m1-13-2020-space-grey-16216.php"><img src="https://www.bazos.cz/img/1t/015/221379015.jpg?t=1784214781" class="obrazek" alt="Koupím krabici od MacBook Pro M1 13&quot; 2020 Space Grey 16/512" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221379015/koupim-krabici-od-macbook-pro-m1-13-2020-space-grey-16216.php">Koupím krabici od MacBook Pro M1 13&quot; 2020 Space Grey 16/512</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Koupím originální krabici v pěkném stavu od notebooku <b>macbook</b> Pro M1 13" z roku 2020 v barvě Space Grey v konfiguraci 16/512. Foto ilustrační.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">Dohodou</span></b></div>
+<div class="inzeratylok">Kroměříž<br>768 11</div>
+<div class="inzeratyview">71 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221379015');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221379015');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221379015');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221366529/macbook-air-13.php"><img src="https://www.bazos.cz/img/1t/529/221366529.jpg" class="obrazek" alt="Macbook Air 13”" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221366529/macbook-air-13.php">Macbook Air 13”</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Apple <b>macbook</b> Air 13” - velice zachovalý, málo používaný (baterie, počet cyklů pouze 144). Součástí prodeje je kompletní krabice viz foto + obal.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  9 990 Kč</span></b></div>
+<div class="inzeratylok">Brno<br>635 00</div>
+<div class="inzeratyview">153 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221366529');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221366529');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221366529');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221366376/apple-macbook-air-2018-133-128gb.php"><img src="https://www.bazos.cz/img/1t/376/221366376.jpg" class="obrazek" alt="Apple MacBook Air 2018 13,3&quot; 128GB" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221366376/apple-macbook-air-2018-133-128gb.php">Apple MacBook Air 2018 13,3&quot; 128GB</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Notebook Apple <b>macbook</b> Air (2018) 13,3" 128GB
+- s kompletním orig. balením 
+- plně funkční, lehké známky opotřebení bez ovlivnění funkčnosti viz. foto
+
+PLATÍ DO SMAZÁNÍ
+DALŠÍ MÉ INZERÁTY NA PROFILU (Playstation, XBOX, Nintendo ,GoPro, DJI, Apple ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  8 990 Kč</span></b></div>
+<div class="inzeratylok">Mladá Boleslav<br>293 01</div>
+<div class="inzeratyview">157 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221366376');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221366376');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221366376');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221363894/macbook-pro-13-retina-early-2015-8gb-ram-256gb-ssd.php"><img src="https://www.bazos.cz/img/1t/894/221363894.jpg?t=1786771140" class="obrazek" alt="MacBook Pro 13 Retina Early 2015 8GB RAM, 256GB SSD" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221363894/macbook-pro-13-retina-early-2015-8gb-ram-256gb-ssd.php">MacBook Pro 13 Retina Early 2015 8GB RAM, 256GB SSD</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Prodám použitý <b>macbook</b> Pro 13 z roku 2015 (<b>macbook</b>Pro12,1).
+Notebook má různá poškození, která nemají vliv na funkci - už jsem ho tak před lety koupil. (Viz. Foto).
+
+Parametry:
+Display: 13.3” LED IPS Retina 2560x1600 (227ppi)
+Procesor: Intel Cor ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  2 290 Kč</span></b></div>
+<div class="inzeratylok">Nymburk<br>289 15</div>
+<div class="inzeratyview">249 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221363894');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221363894');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221363894');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221363020/macbook-pro-25-ghz-intel-core-i5-nabijecka-a-externi-kla.php"><img src="https://www.bazos.cz/img/1t/020/221363020.jpg" class="obrazek" alt="MacBook Pro 15&quot; 2,5 GHz Intel Core i5+ nabijecka +klavesnic" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221363020/macbook-pro-25-ghz-intel-core-i5-nabijecka-a-externi-kla.php">MacBook Pro 15&quot; 2,5 GHz Intel Core i5+ nabijecka +klavesnic</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Prodam tuto super sadu na doma i do prace. Jedna se o <b>macbook</b> 2,5 GHz Dvoujádrový Intel Core i5, nainstalovany MacOs Monterey ale lze i jakykoliv jiny mac operační system. Po dohode pripravím. Mac je v skvělém stavu. Soucasti prodeje je nova nabijeck ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  4 500 Kč</span></b></div>
+<div class="inzeratylok">Vyškov<br>684 01</div>
+<div class="inzeratyview">143 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221363020');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221363020');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221363020');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/221358275/apple-macbook-air.php"><img src="https://www.bazos.cz/img/1t/275/221358275.jpg" class="obrazek" alt="Apple Macbook air" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/221358275/apple-macbook-air.php">Apple Macbook air</a></h2><span class=velikost10> - [16.7. 2026]</span><br>
+<div class=popis>Prodám apple <b>macbook</b> typ 1370 spadli systém kdo umí opravy</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  2 000 Kč</span></b></div>
+<div class="inzeratylok">Děčín<br>405 02</div>
+<div class="inzeratyview">117 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','221358275');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','221358275');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','0','0','Prodejce');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','221358275');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+<div id="container_two"></div><script type="text/javascript" charset="utf-8">
+var pageOptions = {
+  'pubId': 'pub-3645948300403337',
+  'query' : "macbook",
+  "channel": "4719857758",  'linkTarget' : '_blank',
+  'personalizedAds' : 'false',
+  'ivt': false,
+'styleId' : '6171314811',  'adPage': 73,
+  'hl': 'cs'
+};
+
+var adblock1 = {
+  'container': 'container_one',
+  'width': 'auto',
+  'maxTop' : 2
+};
+
+var adblock2 = {
+  'container': 'container_two',
+  'width': 'auto',
+  'number' : 2
+};
+
+_googCsa('ads', pageOptions, adblock2);</script>
+
+<br><div class="strankovani">Stránka: <a href="/1420/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order="><b>Předchozí</b></a> <a href="/1300/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">66</a> <a href="/1320/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">67</a> <a href="/1340/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">68</a> <a href="/1360/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">69</a> <a href="/1380/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">70</a> <a href="/1400/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">71</a> <a href="/1420/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">72</a> <a href="/1440/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=">73</a> <a href="/1460/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order="><b>Další</b></a></div><br><br><br>
+
+
+</div></div><br>
+
+&copy;2026 Bazoš -  <b>Inzerce, Bazar </b><br>
+<a href="https://www.bazos.cz/napoveda.php">Nápověda</a>, <a href="https://www.bazos.cz/dotazy.php">Dotazy</a>, <a href="https://www.bazos.cz/hodnoceni.php">Hodnocení</a>, <a href="https://www.bazos.cz/kontakt.php">Kontakt</a>, <a href="https://www.bazos.cz/reklama.php">Reklama</a>, <a href="https://www.bazos.cz/podminky.php">Podmínky</a>, <a href="https://www.bazos.cz/ochrana-udaju.php">Ochrana údajů</a>, <span onclick="odeslatakci('rss','&humkreis=25&hledat=macbook');return false;" class="paction">RSS</span>, <form name="formvkm" id="formvkm" method="post" style="display: inline;"><input type="hidden" name="vkm" value="m"><input type="submit" class="vkm" value="Mobilní verze"></form><br>
+
+Inzeráty PC celkem: <b>43955</b>, za 24 hodin: <b>2017</b><br><br>
+<a href="https://www.bazos.cz/mapa-kategorie.php">Mapa kategorií</a>, <a href="https://pc.bazos.cz/mapa-search.php">Nejvyhledávanější výrazy</a>
+<br>
+Země: <a href="https://pc.bazos.cz">Česká republika</a>, <a href="https://pc.bazos.sk">Slovensko</a>, <a href="https://komputer.bazos.pl">Polsko</a>, <a href="https://pc.bazos.at">Rakousko</a>
+<br>
+<br>
+</div>
+
+<script src="https://www.bazos.cz/cookie-consent.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+cookieconsent.run({"notice_banner_type":"simple","consent_type":"express","palette":"light","language":"cs","page_load_consent_levels":["strictly-necessary"],"notice_banner_reject_button_hide":false,"preferences_center_close_button_hide":false,"page_refresh_confirmation_buttons":false,"cookie_domain": "bazos.cz"});
+});
+</script>
+<a href="#" id="open_preferences_center"> </a>
+
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NZW1QTHKBB"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-NZW1QTHKBB');
+</script>
+
+</body>
+</html>

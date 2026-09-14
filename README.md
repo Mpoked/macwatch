@@ -1,61 +1,109 @@
 # macwatch
 
 Hlídá bazary s použitými MacBooky (Air a Pro s čipem M1 a novějším), posoudí cenu
-proti referenční tabulce a výhodné kusy pošle na Discord.
+proti referenčním cenám, výhodné kusy pošle na Discord a vede sklad a ekonomiku přeprodeje.
 
-Zdroje: Bazoš (RSS a detail) a Facebook Marketplace (přes upravený fb-mp-rss v Dockeru).
+Zdroje: Bazoš (RSS, detail a stránka hledání) a Facebook Marketplace (přes upravený fb-mp-rss
+v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 
-## Jak to funguje
+## Co to umí
 
-1. `sources/bazos.py` stáhne RSS hledání (`rss.php?rub=pc&hledat=macbook`).
-   Jeden feed pokryje zhruba 7 hodin inzerátů, interval 4 minuty má velkou rezervu.
-2. Titulky projdou předfiltrem, u nových MacBooků se stáhne detail s plným textem
-   a lokalitou. Po jednom, s rozestupem 4 s, nejvýš 25 detailů za průchod.
-3. `privacy.py` nahradí telefony a e‑maily zástupkou. Jméno prodávajícího se nečte.
-4. `parsing.py` vytáhne rodinu, čip, RAM, SSD, rok, baterii, cykly, příznaky obchodníka
-   a červené vlajky s ohledem na zápor („není blokovaný“ není problém).
-5. `pricing.py` najde referenci podle `zdroj|rodina|čip|ssd`, pak `zdroj|rodina|čip`,
-   pak totéž pro Bazoš. Srazí za baterii (jednou), určí verdikt a ROI.
-6. Upozornění dostanou jen KOUPIT, KOUPIT_S_RIZIKEM a levný model mimo tabulku,
-   a to až po stažení plného textu. Obchodníci se neposílají, dá se zapnout.
-7. Vše jde do SQLite: `listings`, `price_history` (každá změna ceny), `assessments`
-   a `poll_runs` (záznam o každém průchodu).
-
-| Verdikt | Kdy | Ping |
+| Fáze | Co | Kde |
 |---|---|---|
-| KOUPIT | cena ≤ reference × `buy_ratio` | ano |
+| A | Sběr z Bazoše a Marketplace, parser konfigurace, verdikt, Discord | `sources/`, `parsing.py`, `pricing.py`, `notify.py` |
+| B | Životní cyklus: změny ceny, zmizelé inzeráty, doba prodeje, naměřené referenční ceny | `lifecycle.py`, `market.py` |
+| C | Sklad: nákupy, díly, opravy, cesta, marže, ROI, roční ROI, strop kapitálu | `inventory.py`, dashboard Sklad |
+| D | Vzdálenost z PSČ offline, cena cesty podle spotřeby a ceny paliva | `geo.py`, `data/cz_postal.tsv` |
+| E | Webový dashboard, všechno nastavení včetně webhooku | `web/` |
+
+### Jak se posuzuje
+
+1. RSS hledání „macbook“ na Bazoši pokryje zhruba 7 hodin inzerátů, čte se každé 4 minuty.
+   Facebook dodává fb-mp-rss každých 15 minut.
+2. U nových MacBooků z Bazoše se stáhne detail s plným textem a PSČ. Po jednom, s rozestupem 4 s.
+3. `privacy.py` nahradí telefony a e‑maily zástupkou. Jméno prodávajícího se nečte.
+4. `parsing.py` vytáhne rodinu, čip, RAM, SSD, rok, baterii, cykly, obchodníka a rizika se zápory.
+5. Reference: v režimu `auto` medián cen inzerátů, které zmizely do 14 dnů (po skupinách
+   zdroj + rodina + čip + SSD, s vlastními prodeji s vyšší váhou). Když vzorků není dost,
+   ruční tabulka. Pro Marketplace bez vlastních dat se použije Bazoš.
+6. K ceně se připočte cesta: vzdálenost od domova po silnici krát spotřeba krát cena paliva,
+   tam i zpět. Cesta sníží zisk, ROI i verdikt. Kus dál než `max_km` se nepingne.
+
+| Verdikt | Kdy (cena včetně cesty) | Ping |
+|---|---|---|
+| KOUPIT | ≤ reference × `buy_ratio` | ano |
 | KOUPIT_S_RIZIKEM | totéž, ale prasklina, iCloud, MDM, na díly | ano |
-| SLEDOVAT | cena ≤ reference × `watch_ratio` | ne |
+| SLEDOVAT | ≤ reference × `watch_ratio` | ne |
 | NEVYPLATI_SE | dražší | ne |
 | NEZNAMY_MODEL | model není v tabulce | jen pod `unknown_model_alert_below_czk` |
 | BEZ_CENY, MIMO | bez ceny, nebo ne MacBook M1+ | ne |
 
+### Životní cyklus (fáze B)
+
+Každé 3 hodiny služba projde všechny stránky hledání na Bazoši (asi 75 stránek, 5 minut).
+Známé inzeráty označí jako viděné a zapíše změnu ceny, zlevnění může spustit upozornění.
+Když průchod doběhne celý, neviděné aktivní inzeráty ověří přes detail: smazaný dostane `gone_at`.
+Prodej = zmizení do `sold_within_days` od prvního spatření. Facebook bez přihlášení
+zmizení nepozná, statistiky prodejů jsou zatím jen z Bazoše.
+
 ## Setup od nuly
 
-Potřebuješ jen Python 3.13 nebo novější. Za běhu žádné další balíčky.
+Potřebuješ Python 3.13 nebo novější. Za běhu žádné další balíčky.
 
 ```
 git clone <repo> ~/Projects/macwatch
 cd ~/Projects/macwatch
 cp config.example.json config.json
+python3 -m macwatch --migrate
+python3 -m macwatch --dry-run          # zkušební průchod, nic neuloží ani neodešle
 ```
 
-V `config.json` nastav:
+Všechno ostatní se nastavuje v dashboardu (sekce Nastavení a Ceny): Discord webhook,
+feedy, poměry pro verdikt, domovské PSČ, max. vzdálenost nebo celá ČR, spotřeba,
+cena paliva, strop kapitálu, režim referenčních cen. Nastavení se ukládá do databáze
+a přebíjí `config.json`, služba ho načte při dalším průchodu bez restartu.
+V `config.json` zůstávají jen cesta k databázi, HTTP a regulární výrazy parseru.
 
-1. `discord_webhook_url`: Discord, nastavení kanálu, Integrace, Webhooky, Nový webhook,
-   Kopírovat URL. Místo configu jde použít proměnnou `MACWATCH_DISCORD_WEBHOOK`.
-2. `pricing.reference`: referenční ceny. Klíč je `bazos|air|m1|256`
-   (zdroj, rodina `air` nebo `pro`, čip `m1`, `m2 pro`, `m3 max`..., SSD v GB:
-   128, 256, 512, 1024, 2048). Varianta bez SSD `bazos|air|m1` platí jako záloha.
+Další příkazy: `--once` jeden ostrý průchod, `--lifecycle` hned kontrola životního cyklu,
+`--web` dashboard, `-v` podrobné logy.
 
-Zkušební běh (nic neuloží, nic neodešle, vypíše nálezy):
+## Běh jako služba
 
 ```
-python3 -m macwatch --dry-run
+systemctl --user link ~/Projects/macwatch/deploy/macwatch.service
+systemctl --user link ~/Projects/macwatch/deploy/macwatch-web.service
+systemctl --user enable --now macwatch.service macwatch-web.service
+sudo loginctl enable-linger $USER          # běh bez přihlášení a po restartu
+journalctl --user -u macwatch -f           # logy sběru
+journalctl --user -u macwatch -p warning   # jen varování a chyby
 ```
 
-Jeden ostrý průchod: `python3 -m macwatch --once`. Jen migrace: `--migrate`.
-Podrobné logy: `-v`.
+Unity počítají s projektem v `~/Projects/macwatch`. Dashboard poslouchá na `127.0.0.1:8080`.
+
+## Dashboard za Cloudflare Access
+
+Dashboard obsahuje obchodní data a nemá vlastní přihlašování. Nesmí být dostupný jinak než
+přes Cloudflare Access.
+
+1. V Zero Trust: Access, Applications, Add application, Self-hosted. Doména třeba
+   `mac.tvoje-domena.cz`. Policy: Allow, Include, Emails, jen tvůj e‑mail.
+2. Do konfigurace existujícího tunelu (`~/.cloudflared/config.yml` nebo v dashboardu tunelu)
+   přidej pravidlo před závěrečné `http_status:404`:
+
+   ```yaml
+   ingress:
+     - hostname: mac.tvoje-domena.cz
+       service: http://127.0.0.1:8080
+     # ... ostatní pravidla ...
+     - service: http_status:404
+   ```
+
+3. `cloudflared tunnel route dns <tunel> mac.tvoje-domena.cz` a restart cloudflared.
+4. Ověř v anonymním okně, že adresa nejdřív chce přihlášení přes Access.
+
+Formuláře odmítají požadavky z cizích stránek (kontrola Origin proti Host, případně
+X-Forwarded-Host). Když by za tunelem ukládání vracelo 403, nastav u pravidla
+`originRequest: { httpHostHeader: mac.tvoje-domena.cz }`.
 
 ## Facebook Marketplace
 
@@ -78,9 +126,20 @@ a hledání „macbook“, zkopíruj adresu a přidej `sortBy=creation_time_desc
 ukáže jen první várku kolem 24 inzerátů, proto na řazení záleží. Filtr titulku:
 `"level1": ["macbook", "mac book"]`. Interval `refresh_interval_minutes` nech na 15.
 
-Feed nemá popis inzerátu, posouzení z Facebooku stojí jen na titulku a baterii ani
-červené vlajky z něj nepozná. Dokud nejsou reference `facebook|...`, použijí se ceny z Bazoše
-a v upozornění je to napsané.
+Feed nemá popis inzerátu ani PSČ, jen město. Posouzení stojí na titulku a vzdálenost se počítá
+podle názvu obce.
+
+## Sklad a ekonomika (fáze C)
+
+Kus přidáš v dashboardu Sklad, nebo z detailu inzerátu tlačítkem „Koupil jsem“ (předvyplní
+model, cenu, odkaz a ujeté km). U kusu evidueš díly, opravy a další náklady, vystavení a prodej.
+
+* hrubá marže = prodej, minus nákup
+* čistá marže = prodej, minus nákup, náklady, cesta (km × Kč/km z nastavení) a poplatky
+* ROI = čistá marže / (nákup + náklady + cesta), roční ROI = (1 + ROI)^(365 / dní držení), minus 1
+* vázaný kapitál = investice do neprodaných kusů, nad stropem dashboard varuje
+
+Prodané kusy vstupují do referenčních cen s váhou `own_sale_weight` (výchozí 3).
 
 ## Testy
 
@@ -90,22 +149,8 @@ python3 -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-Testy nechodí na síť, pokus o spojení test shodí. Vzorky jsou v `tests/fixtures/bazos/`
-(skutečné stránky, jméno prodávajícího a telefony nahrazené). Ručně ověřené hodnoty
-k detailům jsou v `expected.json`, nový vzorek = HTML soubor plus řádek v něm.
-
-## Běh jako služba
-
-```
-systemctl --user link ~/Projects/macwatch/deploy/macwatch.service
-systemctl --user enable --now macwatch.service
-sudo loginctl enable-linger $USER     # běh i bez přihlášení a po restartu
-journalctl --user -u macwatch -f      # logy
-journalctl --user -u macwatch -p warning   # jen varování a chyby
-```
-
-Unit počítá s projektem v `~/Projects/macwatch`, jinak uprav cesty v `deploy/macwatch.service`.
-Při zastavení služba dokončí rozběhnutý průchod.
+Testy nechodí na síť, pokus o spojení test shodí (výjimkou je jeden test dashboardu
+na loopbacku). Vzorky jsou v `tests/fixtures/` (skutečné stránky, jména a telefony nahrazené).
 
 ## Databáze a migrace
 
@@ -124,5 +169,6 @@ v sekci `parsing`. Kód obsahuje jen obecné extraktory (cena, kapacity, procent
 |---|---|---|
 | Python standardní knihovna | PSF | běh |
 | pytest | MIT | jen testy |
+| GeoNames postal codes CZ | CC BY 4.0 | PSČ a souřadnice, `macwatch/data/cz_postal.tsv` |
 | facebook-marketplace-rss (fork) | BSD-3-Clause | sběr z Marketplace, Docker |
 | Firefox, geckodriver, Selenium | MPL-2.0, MPL-2.0, Apache-2.0 | uvnitř kontejneru fb-mp-rss |

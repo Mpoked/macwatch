@@ -1,0 +1,17 @@
+# Webový dashboard jako uživatelská služba systemd.
+# Poslouchá jen na 127.0.0.1, ven se vystavuje přes Cloudflare Tunnel za Cloudflare Access.
+
+[Unit]
+Description=macwatch dashboard
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/macwatch
+ExecStart=/usr/bin/python3 -m macwatch --web --host 127.0.0.1 --port 8080 --config %h/Projects/macwatch/config.json
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

@@ -157,11 +157,30 @@ class Database:
                VALUES (?, ?, ?, ?, ?)""",
             (*key, _iso(now), price_czk, price_raw))
 
-    def mark_gone(self, key: tuple[str, str], now: datetime) -> None:
+    def mark_gone(self, key: tuple[str, str], now: datetime, reason: str = "zmizel") -> None:
         with self.conn:
             self.conn.execute(
-                """UPDATE listings SET gone_at = COALESCE(gone_at, ?)
-                   WHERE source = ? AND source_id = ?""", (_iso(now), *key))
+                """UPDATE listings SET gone_at = COALESCE(gone_at, ?),
+                       gone_reason = COALESCE(gone_reason, ?), last_checked_at = ?
+                   WHERE source = ? AND source_id = ?""", (_iso(now), reason, _iso(now), *key))
+
+    def mark_checked(self, key: tuple[str, str], now: datetime) -> None:
+        """Inzerát jsme viděli při kontrole životního cyklu."""
+        with self.conn:
+            self.conn.execute(
+                """UPDATE listings SET last_seen = ?, last_checked_at = ?
+                   WHERE source = ? AND source_id = ?""", (_iso(now), _iso(now), *key))
+
+    def unseen_active(self, source: str, before: datetime, limit: int) -> list[sqlite3.Row]:
+        """Aktivní inzeráty, které nebyly vidět od `before`. Nejdéle neviděné první."""
+        return self.conn.execute(
+            """SELECT * FROM listings WHERE source = ? AND gone_at IS NULL AND last_seen < ?
+               ORDER BY last_seen LIMIT ?""", (source, _iso(before), limit)).fetchall()
+
+    def last_finished_run(self, source: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            """SELECT * FROM poll_runs WHERE source = ? AND finished_at IS NOT NULL AND errors = 0
+               ORDER BY id DESC LIMIT 1""", (source,)).fetchone()
 
     def mark_alerted(self, key: tuple[str, str], now: datetime) -> None:
         with self.conn:
@@ -184,15 +203,16 @@ class Database:
                        assessed_at, eligible, family, chip, ram_gb, ssd_gb, year, battery_pct,
                        cycles, is_dealer, red_flags, reference_czk, reference_key,
                        reference_origin, adjusted_reference_czk, target_czk, est_profit_czk,
-                       roi, score, verdict)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       roi, score, verdict, distance_km, travel_cost_czk, reference_samples)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (*key, PARSER_VERSION, _iso(now), int(specs.eligible), specs.family, specs.chip,
                  specs.ram_gb, specs.ssd_gb, specs.year, specs.battery_pct, specs.cycles,
                  int(specs.is_dealer), json.dumps(list(specs.red_flags)),
                  assessment.reference_czk, assessment.reference_key,
                  assessment.reference_origin, assessment.adjusted_reference_czk,
                  assessment.target_czk, assessment.est_profit_czk, assessment.roi,
-                 assessment.score, assessment.verdict))
+                 assessment.score, assessment.verdict, assessment.distance_km,
+                 assessment.travel_cost_czk, assessment.reference_samples))
 
     # běhy
 

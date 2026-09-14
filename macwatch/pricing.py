@@ -1,35 +1,30 @@
-"""Referenční ceny, srážky, skóre a verdikt."""
+"""Referenční ceny, srážky, cesta, skóre a verdikt."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from macwatch.config import PricingConfig
 from macwatch.models import Assessment, Specs, Verdict
 
+if TYPE_CHECKING:
+    from macwatch.geo import Travel
+    from macwatch.market import ReferenceBook
+
 ALERT_VERDICTS = frozenset({Verdict.KOUPIT, Verdict.KOUPIT_S_RIZIKEM, Verdict.NEZNAMY_MODEL})
+
+
+def manual_book(cfg: PricingConfig) -> ReferenceBook:
+    from macwatch.market import ReferenceBook
+    return ReferenceBook(manual=dict(cfg.reference), mode="manual",
+                         fallback_source=cfg.fallback_source)
 
 
 def lookup_reference(source: str, specs: Specs,
                      cfg: PricingConfig) -> tuple[int, str, str] | None:
-    """Najde referenční cenu. Vrací (cena, klíč, původ).
-
-    Pořadí: zdroj|rodina|čip|ssd, zdroj|rodina|čip, a pak totéž pro
-    záložní zdroj (výchozí Bazoš), dokud pro daný zdroj nejsou vlastní data.
-    """
-    if not specs.family or not specs.chip:
-        return None
-    sources = [source]
-    if cfg.fallback_source and cfg.fallback_source != source:
-        sources.append(cfg.fallback_source)
-    for src in sources:
-        keys = []
-        if specs.ssd_gb:
-            keys.append(f"{src}|{specs.family}|{specs.chip}|{specs.ssd_gb}")
-        keys.append(f"{src}|{specs.family}|{specs.chip}")
-        for key in keys:
-            if key in cfg.reference:
-                origin = "config" if src == source else f"config:{src}"
-                return cfg.reference[key], key, origin
-    return None
+    """Ruční tabulka: zdroj|rodina|čip|ssd, zdroj|rodina|čip, pak totéž pro záložní zdroj."""
+    hit = manual_book(cfg).lookup(source, specs.family, specs.chip, specs.ssd_gb)
+    return hit[:3] if hit else None
 
 
 def battery_penalty(specs: Specs, cfg: PricingConfig) -> int:
@@ -39,45 +34,63 @@ def battery_penalty(specs: Specs, cfg: PricingConfig) -> int:
     return cfg.battery_penalty_czk if worn else 0
 
 
-def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig) -> Assessment:
+def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
+           book: ReferenceBook | None = None, travel: Travel | None = None) -> Assessment:
+    """Posoudí inzerát.
+
+    Cesta není filtr, ale náklad: připočte se k ceně, sníží zisk a ROI a posune verdikt.
+    Kus za hranicí `max_km` se nepingne, v přehledu ale zůstane.
+    """
+    distance = travel.distance_km if travel else None
+    travel_cost = travel.cost_czk if travel else 0
+    place = travel.place.name if travel else None
+    base = dict(distance_km=distance, travel_cost_czk=travel_cost if travel else None,
+                locality_label=place)
+
     if not specs.eligible:
-        return Assessment(Verdict.MIMO, notes=(specs.reason,) if specs.reason else ())
+        return Assessment(Verdict.MIMO, notes=(specs.reason,) if specs.reason else (), **base)
     if price_czk is None or price_czk <= 0:
-        return Assessment(Verdict.BEZ_CENY)
+        return Assessment(Verdict.BEZ_CENY, **base)
 
     notes: list[str] = []
     if specs.red_flags:
         notes.append("riziko: " + ", ".join(specs.red_flags))
     if specs.is_dealer:
         notes.append("obchodník")
-    dealer_blocked = specs.is_dealer and not cfg.alert_dealers
+    blocked = specs.is_dealer and not cfg.alert_dealers
+    if travel and not travel.within_limit:
+        notes.append(f"mimo dojezd ({distance:.0f} km)")
+        blocked = True
+    effective_price = price_czk + travel_cost
 
-    found = lookup_reference(source, specs, cfg)
+    found = (book or manual_book(cfg)).lookup(source, specs.family, specs.chip, specs.ssd_gb)
     if found is None:
-        cheap = price_czk <= cfg.unknown_model_alert_below_czk
-        return Assessment(Verdict.NEZNAMY_MODEL, should_alert=cheap and not dealer_blocked,
-                          notes=tuple(notes))
+        cheap = effective_price <= cfg.unknown_model_alert_below_czk
+        return Assessment(Verdict.NEZNAMY_MODEL, should_alert=cheap and not blocked,
+                          notes=tuple(notes), **base)
 
-    reference, key, origin = found
+    reference, key, origin, samples = found
     penalty = battery_penalty(specs, cfg)
     if penalty:
         notes.append(f"srážka za baterii {penalty} Kč")
+    if travel_cost:
+        notes.append(f"cesta {travel_cost} Kč")
     adjusted = reference - penalty
     buy_limit = round(adjusted * cfg.buy_ratio)
     watch_limit = round(adjusted * cfg.watch_ratio)
-    profit = adjusted - price_czk
-    roi = profit / price_czk
+    profit = adjusted - effective_price
+    roi = profit / effective_price
 
-    if price_czk <= buy_limit:
+    if effective_price <= buy_limit:
         verdict = Verdict.KOUPIT_S_RIZIKEM if specs.red_flags else Verdict.KOUPIT
-    elif price_czk <= watch_limit:
+    elif effective_price <= watch_limit:
         verdict = Verdict.SLEDOVAT
     else:
         verdict = Verdict.NEVYPLATI_SE
 
     return Assessment(
         verdict=verdict,
-        should_alert=verdict in ALERT_VERDICTS and not dealer_blocked,
+        should_alert=verdict in ALERT_VERDICTS and not blocked,
         reference_czk=reference,
         reference_key=key,
         reference_origin=origin,
@@ -87,4 +100,6 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig)
         roi=round(roi, 4),
         score=round(roi * 100, 1),
         notes=tuple(notes),
+        reference_samples=samples,
+        **base,
     )

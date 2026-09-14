@@ -27,6 +27,40 @@ class BazosConfig:
     enabled: bool
     feeds: tuple[str, ...]
     max_details_per_poll: int = 25
+    lifecycle_search_url: str = "https://pc.bazos.cz/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=&kitx=ne"
+    lifecycle_interval_hours: float = 3.0
+    lifecycle_max_pages: int = 100
+    lifecycle_confirm_per_pass: int = 40
+
+
+@dataclass(frozen=True, slots=True)
+class MarketConfig:
+    reference_mode: str = "auto"      # auto: naměřená cena, když je dost vzorků; manual: jen ruční tabulka
+    sold_within_days: int = 14
+    lookback_days: int = 120
+    min_samples: int = 3
+    own_sale_weight: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class TravelSettings:
+    enabled: bool = True
+    home_psc: str = ""
+    max_km: float | None = None          # None znamená celá ČR bez omezení
+    consumption_l_per_100km: float = 6.5
+    fuel_price_czk_per_l: float = 38.0
+    extra_czk_per_km: float = 0.0        # amortizace, dálniční známka, čas
+    road_factor: float = 1.3             # silnice jsou delší než vzdušná čára
+    round_trip: bool = True
+
+    @property
+    def czk_per_km(self) -> float:
+        return self.consumption_l_per_100km / 100 * self.fuel_price_czk_per_l + self.extra_czk_per_km
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryConfig:
+    capital_cap_czk: int = 0          # 0 znamená bez stropu
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +109,9 @@ class AppConfig:
     facebook: FacebookConfig
     parsing: ParsingRules
     pricing: PricingConfig
+    market: MarketConfig = field(default_factory=MarketConfig)
+    travel: TravelSettings = field(default_factory=TravelSettings)
+    inventory: InventoryConfig = field(default_factory=InventoryConfig)
 
 
 def _require(data: dict[str, Any], key: str, where: str) -> Any:
@@ -151,6 +188,40 @@ def parse_pricing(data: dict[str, Any]) -> PricingConfig:
     )
 
 
+def parse_market(data: dict[str, Any]) -> MarketConfig:
+    mode = data.get("reference_mode", "auto")
+    if mode not in ("auto", "manual"):
+        raise ConfigError("market.reference_mode musí být auto nebo manual")
+    cfg = MarketConfig(
+        reference_mode=mode,
+        sold_within_days=int(data.get("sold_within_days", 14)),
+        lookback_days=int(data.get("lookback_days", 120)),
+        min_samples=int(data.get("min_samples", 3)),
+        own_sale_weight=int(data.get("own_sale_weight", 3)),
+    )
+    if min(cfg.sold_within_days, cfg.lookback_days, cfg.min_samples, cfg.own_sale_weight) < 1:
+        raise ConfigError("market: počty dní, vzorků a váha musí být aspoň 1")
+    return cfg
+
+
+def parse_travel(data: dict[str, Any]) -> TravelSettings:
+    unlimited = bool(data.get("unlimited", False))
+    max_km = data.get("max_km")
+    cfg = TravelSettings(
+        enabled=bool(data.get("enabled", True)),
+        home_psc=str(data.get("home_psc", "") or ""),
+        max_km=None if unlimited or max_km in (None, "", 0) else float(max_km),
+        consumption_l_per_100km=float(data.get("consumption_l_per_100km", 6.5)),
+        fuel_price_czk_per_l=float(data.get("fuel_price_czk_per_l", 38.0)),
+        extra_czk_per_km=float(data.get("extra_czk_per_km", 0.0)),
+        road_factor=float(data.get("road_factor", 1.3)),
+        round_trip=bool(data.get("round_trip", True)),
+    )
+    if cfg.consumption_l_per_100km < 0 or cfg.fuel_price_czk_per_l < 0 or cfg.road_factor < 1:
+        raise ConfigError("travel: spotřeba a cena paliva nesmí být záporné, road_factor aspoň 1")
+    return cfg
+
+
 def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
     http = _require(data, "http", "")
     sources = _require(data, "sources", "")
@@ -174,6 +245,10 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
             enabled=bool(bazos.get("enabled", False)),
             feeds=tuple(bazos.get("feeds", [])),
             max_details_per_poll=int(bazos.get("max_details_per_poll", 25)),
+            lifecycle_search_url=bazos.get("lifecycle_search_url", BazosConfig.lifecycle_search_url),
+            lifecycle_interval_hours=float(bazos.get("lifecycle_interval_hours", 3.0)),
+            lifecycle_max_pages=int(bazos.get("lifecycle_max_pages", 100)),
+            lifecycle_confirm_per_pass=int(bazos.get("lifecycle_confirm_per_pass", 40)),
         ),
         facebook=FacebookConfig(
             enabled=bool(facebook.get("enabled", False)),
@@ -181,6 +256,10 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
         ),
         parsing=parse_parsing(_require(data, "parsing", "")),
         pricing=parse_pricing(_require(data, "pricing", "")),
+        market=parse_market(data.get("market", {})),
+        travel=parse_travel(data.get("travel", {})),
+        inventory=InventoryConfig(
+            capital_cap_czk=int(data.get("inventory", {}).get("capital_cap_czk", 0) or 0)),
     )
 
 
