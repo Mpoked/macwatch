@@ -1,0 +1,20 @@
+# Uživatelská služba systemd.
+# Instalace: viz README, sekce "Běh jako služba".
+
+[Unit]
+Description=macwatch, hlídač bazarů s MacBooky
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/macwatch
+ExecStart=/usr/bin/python3 -m macwatch --config %h/Projects/macwatch/config.json
+Restart=on-failure
+RestartSec=60
+# při zastavení počká na dokončení rozběhnutého průchodu
+TimeoutStopSec=120
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

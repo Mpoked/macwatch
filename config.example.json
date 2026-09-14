@@ -1,0 +1,77 @@
+{
+  "database": "macwatch.db",
+  "poll_interval_seconds": 240,
+  "discord_webhook_url": "",
+
+  "http": {
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
+    "min_delay_seconds": 4,
+    "timeout_seconds": 20,
+    "max_retries": 3
+  },
+
+  "sources": {
+    "bazos": {
+      "enabled": true,
+      "feeds": [
+        "https://www.bazos.cz/rss.php?rub=pc&hledat=macbook",
+        "https://www.bazos.cz/rss.php?rub=pc&hledat=mac+book"
+      ],
+      "max_details_per_poll": 25
+    }
+  },
+
+  "parsing": {
+    "prefilter": ["mac\\s*-?\\s*book", "\\bmbp\\b", "\\bmba\\b"],
+    "families": {
+      "air": ["mac\\s*-?\\s*book\\s*air", "\\bmba\\b"],
+      "pro": ["mac\\s*-?\\s*book\\s*pro", "\\bmbp\\b"]
+    },
+    "family_words": {
+      "air": ["\\bair\\b"],
+      "pro": ["\\bpro\\b"]
+    },
+    "chip_pattern": "\\b(?:apple\\s*)?m\\s?([1-9])(?:\\s*-?\\s*(pro|max|ultra))?\\b",
+    "min_chip_generation": 1,
+    "min_year_without_chip": 2021,
+    "non_apple_cpu": ["\\bintel\\b", "\\bcore\\s*i[3579]\\b", "\\bi[3579]\\b", "\\bcore\\s*2\\b"],
+    "ram_values_gb": [8, 16, 18, 24, 32, 36, 48, 64, 96, 128],
+    "ssd_values_gb": [128, 256, 512, 1024, 2048, 4096, 8192],
+    "negations_before": ["ne", "neni", "nejsou", "nebyl", "nebyla", "nebylo", "nema", "nemaji", "bez", "zadny", "zadna", "zadne", "zadnou", "zadnych", "ani", "nikdy", "not", "no", "without"],
+    "negations_after": ["ne", "nema", "neni", "zadny", "zadne", "zadna", "no", "free", "off", "odhlasen", "odhlaseny", "odhlasena"],
+    "red_flags": {
+      "poskozeni": ["\\bpraskl\\w*", "\\brozbit\\w*", "\\bcar[ay]\\w*\\s+(?:pres|na)\\s+displej\\w*", "\\bpruh\\w*\\s+(?:pres|na)\\s+displej\\w*", "\\bvadn\\w*\\s+displej\\w*", "\\bposkozen\\w*\\s+displej\\w*", "\\bpolit\\w*", "\\bzatecen\\w*"],
+      "icloud": ["\\bicloud\\w*\\s*(?:zamek|zamk\\w*|lock\\w*|zamcen\\w*|blokac\\w*|blokovan\\w*)", "\\b(?:zamcen\\w*|blokovan\\w*)\\s+(?:na\\s+)?icloud\\w*", "\\bactivation\\s*lock", "\\baktivacn\\w*\\s+zamek"],
+      "mdm": ["\\bmdm\\b", "\\bremote\\s+management\\b", "\\bfiremni\\s+sprav\\w*"],
+      "na_dily": ["\\bna\\s+dily\\b", "\\bnefunkcn\\w*", "\\bnezapne\\b", "\\bnenabootuje\\b", "\\bfor\\s+parts\\b"]
+    },
+    "dealer": [
+      "\\bkod\\s*:\\s*\\w*\\d\\w*",
+      "\\bzaruka\\s*:?\\s*\\d+\\s*mesic\\w*",
+      "\\b\\d+\\s*mesic\\w*\\s+zaruk\\w*",
+      "\\bdvanactimesicni\\s+zaruk\\w*",
+      "\\bvydejn\\w*\\s+mist\\w*",
+      "\\bvystavim\\s+fakturu\\b",
+      "\\bodpocet\\s+dph\\b",
+      "\\bvcetne\\s+dph\\b",
+      "\\be-?shop\\b",
+      "\\bnase\\s+prodejn\\w*"
+    ]
+  },
+
+  "pricing": {
+    "buy_ratio": 0.65,
+    "watch_ratio": 0.80,
+    "battery_min_pct": 85,
+    "cycles_max": 500,
+    "battery_penalty_czk": 1000,
+    "alert_dealers": false,
+    "unknown_model_alert_below_czk": 8000,
+    "fallback_source": "bazos",
+    "reference": {
+      "bazos|air|m1|256": 8900,
+      "bazos|air|m1|512": 9800,
+      "bazos|air|m1": 8900
+    }
+  }
+}
