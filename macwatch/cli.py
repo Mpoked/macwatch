@@ -18,6 +18,7 @@ from macwatch.notify import DiscordNotifier, format_czk
 from macwatch.pipeline import Finding, Pipeline
 from macwatch.sources.base import Source
 from macwatch.sources.bazos import BazosSource
+from macwatch.sources.facebook import FacebookSource
 from macwatch.sources.http import PoliteClient
 
 log = logging.getLogger("macwatch")
@@ -31,6 +32,8 @@ def build_sources(cfg: AppConfig) -> list[Source]:
     sources: list[Source] = []
     if cfg.bazos.enabled:
         sources.append(BazosSource(cfg.bazos, client))
+    if cfg.facebook.enabled:
+        sources.append(FacebookSource(cfg.facebook, client))
     return sources
 
 
@@ -68,7 +71,7 @@ def format_finding(f: Finding) -> str:
         parts.append(f"zisk {a.est_profit_czk:+} Kč, ROI {a.roi * 100:.0f} %")
     if a.notes:
         parts.append("(" + "; ".join(a.notes) + ")")
-    if not f.item.body_complete:
+    if not f.item.body_complete and f.item.body is not None:  # Facebook popis nemá vůbec
         parts.append("[bez detailu]")
     parts.append(f.item.url)
     return "  ".join(parts)

@@ -48,6 +48,8 @@ def _decode(raw: bytes, headers: Message) -> str:
 def _base_domain(url: str) -> str:
     """pc.bazos.cz i www.bazos.cz sdílí jeden rozestup, jde o stejný server."""
     host = urlsplit(url).hostname or ""
+    if host.replace(".", "").isdigit() or ":" in host or "." not in host:
+        return host  # IP adresa nebo localhost
     return ".".join(host.split(".")[-2:])
 
 

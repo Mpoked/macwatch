@@ -30,6 +30,12 @@ class BazosConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class FacebookConfig:
+    enabled: bool
+    feed_url: str = "http://127.0.0.1:5000/rss"
+
+
+@dataclass(frozen=True, slots=True)
 class ParsingRules:
     prefilter: tuple[re.Pattern[str], ...]
     families: dict[str, tuple[re.Pattern[str], ...]]
@@ -66,6 +72,7 @@ class AppConfig:
     discord_webhook_url: str
     http: HttpConfig
     bazos: BazosConfig
+    facebook: FacebookConfig
     parsing: ParsingRules
     pricing: PricingConfig
 
@@ -148,6 +155,7 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
     http = _require(data, "http", "")
     sources = _require(data, "sources", "")
     bazos = sources.get("bazos", {"enabled": False, "feeds": []})
+    facebook = sources.get("facebook", {"enabled": False})
     database = Path(data.get("database", "macwatch.db"))
     if not database.is_absolute():
         database = base_dir / database
@@ -166,6 +174,10 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
             enabled=bool(bazos.get("enabled", False)),
             feeds=tuple(bazos.get("feeds", [])),
             max_details_per_poll=int(bazos.get("max_details_per_poll", 25)),
+        ),
+        facebook=FacebookConfig(
+            enabled=bool(facebook.get("enabled", False)),
+            feed_url=facebook.get("feed_url", "http://127.0.0.1:5000/rss"),
         ),
         parsing=parse_parsing(_require(data, "parsing", "")),
         pricing=parse_pricing(_require(data, "pricing", "")),

@@ -3,7 +3,7 @@
 Hlídá bazary s použitými MacBooky (Air a Pro s čipem M1 a novějším), posoudí cenu
 proti referenční tabulce a výhodné kusy pošle na Discord.
 
-Stav: fáze A, zdroj Bazoš. Facebook Marketplace čeká na Docker.
+Zdroje: Bazoš (RSS a detail) a Facebook Marketplace (přes upravený fb-mp-rss v Dockeru).
 
 ## Jak to funguje
 
@@ -57,6 +57,31 @@ python3 -m macwatch --dry-run
 Jeden ostrý průchod: `python3 -m macwatch --once`. Jen migrace: `--migrate`.
 Podrobné logy: `-v`.
 
+## Facebook Marketplace
+
+Facebook se čte bez přihlášení přes fork `regek/facebook-marketplace-rss` v `~/Projects/fb-mp-rss`
+(větev `macwatch`, změny v `PATCHES.md`). Běží v Dockeru a feed vystavuje jen na `127.0.0.1:5000`.
+
+```
+git clone -b macwatch <fork> ~/Projects/fb-mp-rss
+cd ~/Projects/fb-mp-rss
+mkdir -p data && chmod 777 data          # kontejner zapisuje jako uživatel appuser
+cp config.sample.json data/config.json   # a uprav podle níže
+docker compose up -d --build
+docker logs -f fb-mp-rss                 # "N ads on page, M new"
+curl -s http://127.0.0.1:5000/rss | head
+```
+
+V `data/config.json` je pod `url_filters` adresa hledání. Na Facebooku nastav lokalitu, okruh
+a hledání „macbook“, zkopíruj adresu a přidej `sortBy=creation_time_descend`
+(nejnovější první) a `daysSinceListed=1` (posledních 24 hodin). Bez přihlášení Facebook
+ukáže jen první várku kolem 24 inzerátů, proto na řazení záleží. Filtr titulku:
+`"level1": ["macbook", "mac book"]`. Interval `refresh_interval_minutes` nech na 15.
+
+Feed nemá popis inzerátu, posouzení z Facebooku stojí jen na titulku a baterii ani
+červené vlajky z něj nepozná. Dokud nejsou reference `facebook|...`, použijí se ceny z Bazoše
+a v upozornění je to napsané.
+
 ## Testy
 
 ```
@@ -99,3 +124,5 @@ v sekci `parsing`. Kód obsahuje jen obecné extraktory (cena, kapacity, procent
 |---|---|---|
 | Python standardní knihovna | PSF | běh |
 | pytest | MIT | jen testy |
+| facebook-marketplace-rss (fork) | BSD-3-Clause | sběr z Marketplace, Docker |
+| Firefox, geckodriver, Selenium | MPL-2.0, MPL-2.0, Apache-2.0 | uvnitř kontejneru fb-mp-rss |

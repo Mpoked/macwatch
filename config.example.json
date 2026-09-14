@@ -18,6 +18,10 @@
         "https://www.bazos.cz/rss.php?rub=pc&hledat=mac+book"
       ],
       "max_details_per_poll": 25
+    },
+    "facebook": {
+      "enabled": true,
+      "feed_url": "http://127.0.0.1:5000/rss"
     }
   },
 
