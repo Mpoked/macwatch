@@ -190,6 +190,18 @@ LISTING_HEADERS = [("", ""), ("Verdikt", ""), ("ROI", "num"), ("Model", ""), ("I
                    ("Místo", ""), ("Zdroj", ""), ("Vloženo", "")]
 
 
+def recompute(ctx: Ctx) -> int:
+    """Hned přepočítá posouzení aktivních inzerátů podle nového nastavení.
+
+    Upozornění se odtud neposílají, pošle je služba při svém dalším průchodu.
+    """
+    from macwatch.pipeline import Pipeline
+
+    pipeline = Pipeline(ctx.cfg, ctx.db, None, clock=ctx.app.clock, gazetteer=default_gazetteer())
+    pipeline.reassess_active({"bazos"})
+    return ctx.db.conn.execute("SELECT COUNT(*) FROM listings WHERE gone_at IS NULL").fetchone()[0]
+
+
 # nálezy
 
 def findings(ctx: Ctx) -> Response:
@@ -465,12 +477,14 @@ def prices_save(ctx: Ctx) -> Response:
         SettingsStore(ctx.db).set_reference(ctx.req.form.get("key", ""), price, ctx.now)
     except (ValueError, ConfigError) as exc:
         return redirect("/ceny", f"Neuloženo: {exc}", "bad")
-    return redirect("/ceny", "Referenční cena uložena. Posouzení se přepočítá při dalším průchodu.")
+    recompute(ctx)
+    return redirect("/ceny", "Referenční cena uložena a posouzení přepočítáno.")
 
 
 def prices_delete(ctx: Ctx) -> Response:
     SettingsStore(ctx.db).delete_reference(ctx.req.form.get("key", ""))
-    return redirect("/ceny", "Referenční cena smazána.")
+    recompute(ctx)
+    return redirect("/ceny", "Referenční cena smazána a posouzení přepočítáno.")
 
 
 # sklad
@@ -785,7 +799,8 @@ def settings_save(ctx: Ctx) -> Response:
         validate_and_save(ctx.app.config_path, ctx.db, values, ctx.now)
     except ConfigError as exc:
         return settings_page(ctx, values, f"Neuloženo: {exc}")
-    return redirect("/nastaveni", "Nastavení uloženo.")
+    count = recompute(ctx)
+    return redirect("/nastaveni", f"Nastavení uloženo, posouzení {count} inzerátů přepočítáno.")
 
 
 def facebook_panel(ctx: Ctx, cfg: AppConfig, submitted: fbconfig.FbSettings | None = None,

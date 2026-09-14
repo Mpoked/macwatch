@@ -290,3 +290,31 @@ def test_javascript_url_is_not_rendered_as_link(app):
                                                    listing_url="javascript:alert(1)"), NOW)
     html = text(get(app, f"/sklad/{item}"))
     assert 'href="javascript' not in html
+
+
+def test_saving_fuel_price_recomputes_travel_cost_immediately(app):
+    key = seed_listing(app)  # Brno, PSČ 60200
+    form = TestSettings().form(app, **{"travel.home_psc": "68601", "travel.consumption_l_per_100km": "8,5",
+                                       "travel.fuel_price_czk_per_l": "40", "travel.max_km": "",
+                                       "travel.unlimited": "on"})
+    post(app, "/nastaveni", form)
+    conn = app._shared_db.conn
+    km, cost40 = conn.execute("SELECT distance_km, travel_cost_czk FROM assessments WHERE source_id = ?",
+                              (key[1],)).fetchone()
+    assert abs(cost40 - km * 2 * 0.085 * 40) <= 1  # vzdálenost je uložená zaokrouhlená
+
+    resp = post(app, "/nastaveni", TestSettings().form(app, **{"travel.fuel_price_czk_per_l": "100"}))
+    assert "přepočítáno" in unquote(location(resp))
+    cost100 = conn.execute("SELECT travel_cost_czk FROM assessments WHERE source_id = ?", (key[1],)).fetchone()[0]
+    assert abs(cost100 - km * 2 * 0.085 * 100) <= 2
+    assert cost100 > cost40 * 2
+    assert f"{cost100:,}".replace(",", " ") in text(get(app, "/"))
+
+
+def test_saving_reference_recomputes_verdict(app):
+    key = seed_listing(app, verdict=Verdict.NEZNAMY_MODEL)
+    get(app, "/ceny")
+    post(app, "/ceny/ulozit", {"key": "bazos|air|m1|256", "price_czk": "20000"})
+    verdict, ref = app._shared_db.conn.execute(
+        "SELECT verdict, reference_czk FROM assessments WHERE source_id = ?", (key[1],)).fetchone()
+    assert ref == 20000 and verdict == "KOUPIT"
