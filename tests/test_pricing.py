@@ -106,3 +106,31 @@ class TestVerdict:
         cheap = assess("bazos", 4000, AIR_M1_256, cfg.pricing)
         pricier = assess("bazos", 5500, AIR_M1_256, cfg.pricing)
         assert cheap.score > pricier.score
+
+
+class TestSuspiciousPrice:
+    def test_below_ratio_of_reference(self, cfg):
+        a = assess("bazos", 2600, AIR_M1_256, cfg.pricing)   # 2 600 < 0,3 × 8 900 = 2 670
+        assert a.verdict == Verdict.PODEZRELE
+        assert not a.should_alert
+        assert a.reference_czk == 8900
+        assert "podezřele nízká cena" in a.notes[0]
+
+    def test_just_above_ratio_is_normal_buy(self, cfg):
+        a = assess("bazos", 3100, AIR_M1_256, cfg.pricing)
+        assert a.verdict == Verdict.KOUPIT and a.should_alert
+
+    def test_absolute_floor_for_unknown_model(self, cfg):
+        box = Specs(family="pro", chip="m4 max", eligible=True)
+        assert assess("bazos", 600, box, cfg.pricing).verdict == Verdict.PODEZRELE
+        assert assess("bazos", 7900, box, cfg.pricing).verdict == Verdict.NEZNAMY_MODEL
+
+    def test_can_be_disabled(self, cfg):
+        off = dataclasses.replace(cfg.pricing, suspicious_below_ratio=0, suspicious_below_czk=0)
+        assert assess("bazos", 200, AIR_M1_256, off).verdict == Verdict.KOUPIT
+
+    def test_ratio_must_stay_below_buy_ratio(self, config_data, tmp_path):
+        from macwatch.config import ConfigError, parse_config
+        config_data["pricing"]["suspicious_below_ratio"] = 0.7
+        with pytest.raises(ConfigError):
+            parse_config(config_data, tmp_path)

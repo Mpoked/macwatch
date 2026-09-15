@@ -72,6 +72,7 @@ class Verdict:
     NEVYPLATI_SE = "NEVYPLATI_SE"
     NEZNAMY_MODEL = "NEZNAMY_MODEL"
     BEZ_CENY = "BEZ_CENY"
+    PODEZRELE = "PODEZRELE"   # podezřele nízká cena: příslušenství, díl nebo podvod
     MIMO = "MIMO"
 
 

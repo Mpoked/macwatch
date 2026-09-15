@@ -62,8 +62,15 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
         notes.append(f"mimo dojezd ({distance:.0f} km)")
         blocked = True
     effective_price = price_czk + travel_cost
+    suspicious_note = "podezřele nízká cena, nejspíš krabice, díl nebo podvod"
 
     found = (book or manual_book(cfg)).lookup(source, specs.family, specs.chip, specs.ssd_gb, specs.ram_gb)
+    if price_czk < cfg.suspicious_below_czk:
+        reference = found[0] if found else None
+        return Assessment(Verdict.PODEZRELE, reference_czk=reference, adjusted_reference_czk=reference,
+                          reference_key=found[1] if found else None,
+                          reference_origin=found[2] if found else None,
+                          notes=(suspicious_note, *notes), **base)
     if found is None:
         cheap = effective_price <= cfg.unknown_model_alert_below_czk
         return Assessment(Verdict.NEZNAMY_MODEL, should_alert=cheap and not blocked,
@@ -79,6 +86,10 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
     if travel_cost:
         notes.append(f"cesta {travel_cost} Kč")
     adjusted = reference - penalty
+    if cfg.suspicious_below_ratio and price_czk < adjusted * cfg.suspicious_below_ratio:
+        return Assessment(Verdict.PODEZRELE, reference_czk=reference, reference_key=key, reference_origin=origin,
+                          adjusted_reference_czk=adjusted, reference_samples=samples,
+                          notes=(suspicious_note, *notes), **base)
     buy_limit = round(adjusted * cfg.buy_ratio)
     watch_limit = round(adjusted * cfg.watch_ratio)
     profit = adjusted - effective_price

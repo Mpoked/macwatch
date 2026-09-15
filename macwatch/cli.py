@@ -29,7 +29,7 @@ from macwatch.sources.http import PoliteClient
 log = logging.getLogger("macwatch")
 
 _VERDICT_ORDER = {Verdict.KOUPIT: 0, Verdict.KOUPIT_S_RIZIKEM: 1, Verdict.NEZNAMY_MODEL: 2,
-                  Verdict.SLEDOVAT: 3, Verdict.NEVYPLATI_SE: 4, Verdict.BEZ_CENY: 5}
+                  Verdict.SLEDOVAT: 3, Verdict.NEVYPLATI_SE: 4, Verdict.BEZ_CENY: 5, Verdict.PODEZRELE: 6}
 
 
 def build_sources(cfg: AppConfig, client: PoliteClient | None = None) -> list[Source]:

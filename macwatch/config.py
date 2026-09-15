@@ -103,6 +103,8 @@ class PricingConfig:
     fallback_source: str | None
     reference: dict[str, int] = field(default_factory=dict)
     alert_max_age_hours: float = 3.0      # starší inzerát (od vložení nebo zlevnění) se nepingne, 0 = bez limitu
+    suspicious_below_ratio: float = 0.3   # cena pod tímto podílem reference je podezřelá
+    suspicious_below_czk: int = 3000      # a pod touto cenou taky, i když reference chybí
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +183,8 @@ def parse_pricing(data: dict[str, Any]) -> PricingConfig:
     watch = float(_require(data, "watch_ratio", w))
     if not 0 < buy <= watch <= 1:
         raise ConfigError("pricing: musí platit 0 < buy_ratio <= watch_ratio <= 1")
+    if not 0 <= float(data.get("suspicious_below_ratio", 0.3)) < buy:
+        raise ConfigError("pricing: hranice podezřelé ceny musí být pod hranicí pro koupit")
     return PricingConfig(
         buy_ratio=buy,
         watch_ratio=watch,
@@ -190,6 +194,8 @@ def parse_pricing(data: dict[str, Any]) -> PricingConfig:
         alert_dealers=bool(data.get("alert_dealers", False)),
         unknown_model_alert_below_czk=int(data.get("unknown_model_alert_below_czk", 0)),
         alert_max_age_hours=max(float(data.get("alert_max_age_hours", 3.0) or 0), 0.0),
+        suspicious_below_ratio=float(data.get("suspicious_below_ratio", 0.3)),
+        suspicious_below_czk=int(data.get("suspicious_below_czk", 3000)),
         fallback_source=data.get("fallback_source"),
         reference={key.lower(): value for key, value in reference.items()},
     )

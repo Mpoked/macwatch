@@ -73,6 +73,7 @@ def sold_listing_samples(conn: sqlite3.Connection, cfg: MarketConfig, now: datet
            WHERE l.gone_at IS NOT NULL AND l.gone_at >= ?
              AND l.price_czk > 0 AND a.eligible = 1 AND a.is_dealer = 0
              AND a.red_flags = '[]' AND a.family IS NOT NULL AND a.chip IS NOT NULL
+             AND a.verdict != 'PODEZRELE'
              AND julianday(l.gone_at) - julianday(COALESCE(l.published_at, l.first_seen)) <= ?""",
         (since, cfg.sold_within_days)).fetchall()
     return [Sample(r["family"], r["chip"], r["ram_gb"], r["ssd_gb"], r["source"], r["price_czk"],
@@ -226,7 +227,8 @@ def market_overview(conn: sqlite3.Connection, cfg: MarketConfig, now: datetime) 
     active_rows = conn.execute(
         """SELECT l.source, l.price_czk, a.family, a.chip, a.ssd_gb
            FROM listings l JOIN assessments a USING (source, source_id)
-           WHERE l.gone_at IS NULL AND a.eligible = 1 AND a.is_dealer = 0 AND l.price_czk > 0""").fetchall()
+           WHERE l.gone_at IS NULL AND a.eligible = 1 AND a.is_dealer = 0 AND l.price_czk > 0
+             AND a.verdict != 'PODEZRELE'""").fetchall()
     active: dict[tuple[str, str], list[int]] = defaultdict(list)
     for row in active_rows:
         key = group_key(row["family"], row["chip"], row["ssd_gb"])

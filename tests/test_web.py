@@ -314,7 +314,7 @@ def test_saving_fuel_price_recomputes_travel_cost_immediately(app):
 def test_saving_reference_recomputes_verdict(app):
     key = seed_listing(app, verdict=Verdict.NEZNAMY_MODEL)
     get(app, "/ceny")
-    post(app, "/ceny/ulozit", {"key": "bazos|air|m1|256", "price_czk": "20000"})
+    post(app, "/ceny/ulozit", {"key": "bazos|air|m1|256", "price_czk": "12000"})
     verdict, ref = app._shared_db.conn.execute(
         "SELECT verdict, reference_czk FROM assessments WHERE source_id = ?", (key[1],)).fetchone()
-    assert ref == 20000 and verdict == "KOUPIT"
+    assert ref == 12000 and verdict == "KOUPIT"
