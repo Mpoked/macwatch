@@ -266,6 +266,21 @@ def _title_then_body(fn, title: str, body: str, *args):
     return value if value is not None else fn(body, *args)
 
 
+TITLE_RULED_OUT = frozenset({"procesor Intel", "starý čip", "není to hlídaný produkt"})
+
+
+def ruled_out_by_title(specs: Specs) -> bool:
+    """Má smysl stahovat detail? Ne, když už titulek model jasně vyřadil.
+
+    "čip neuveden" a "neznámá rodina" detail potřebují: v textu bývá M1 i u titulku "MacBook Pro 23".
+    """
+    if specs.eligible:
+        return False
+    if specs.reason in TITLE_RULED_OUT:
+        return True
+    return specs.chip is None and specs.year is not None and specs.year < 2020
+
+
 def parse_specs(title: str, body: str | None, rules: ParsingRules) -> Specs:
     t = normalize(title)
     b = normalize(body or "")

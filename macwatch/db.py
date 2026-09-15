@@ -124,6 +124,18 @@ class Database:
                  item.postal_code, _iso(item.published_at), _iso(now), _iso(now)))
             self._record_price(item.key, price_czk, item.price_raw, now)
 
+    def set_detail_status(self, key: tuple[str, str], status: str | None) -> None:
+        with self.conn:
+            self.conn.execute("UPDATE listings SET detail_status = ? WHERE source = ? AND source_id = ?",
+                              (status, *key))
+
+    def detail_backlog(self, source: str, limit: int) -> list[sqlite3.Row]:
+        """Aktivní inzeráty bez plného textu, které čekají na detail. Nejnovější první."""
+        return self.conn.execute(
+            """SELECT * FROM listings WHERE source = ? AND gone_at IS NULL AND body_complete = 0
+                   AND detail_status IS NULL
+               ORDER BY COALESCE(published_at, first_seen) DESC LIMIT ?""", (source, limit)).fetchall()
+
     def set_status(self, key: tuple[str, str], status: str | None, published_at: datetime | None) -> None:
         with self.conn:
             self.conn.execute(

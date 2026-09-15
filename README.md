@@ -49,6 +49,10 @@ v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 
 Každé 3 hodiny služba projde všechny stránky hledání na Bazoši (asi 75 stránek, 5 minut).
 Známé inzeráty označí jako viděné a zapíše změnu ceny, zlevnění může spustit upozornění.
+MacBooky, které v RSS nebyly (třeba vložené před spuštěním sběru nebo s titulkem bez čipu),
+přidá do sledování s datem vložení z výpisu. Jejich detaily služba dostahuje postupně, nejnovější
+první, ze zbytku limitu detailů na průchod. Titulky jasně vyřazené (Intel, starý rok) detail nestahují.
+Staré inzeráty se objeví v přehledu, ale nepingnou (limit stáří pro upozornění).
 Když průchod doběhne celý, neviděné aktivní inzeráty ověří přes detail: smazaný dostane `gone_at`.
 Prodej = zmizení do `sold_within_days` od prvního spatření. Facebook bez přihlášení
 zmizení nepozná, statistiky prodejů jsou zatím jen z Bazoše.

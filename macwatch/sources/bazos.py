@@ -8,7 +8,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 
 from macwatch.config import BazosConfig
@@ -128,6 +128,7 @@ class SearchHit:
     price_raw: str
     locality: str | None
     postal_code: str | None
+    listed_on: date | None = None   # datum ve výpisu (vložení nebo poslední topování)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +143,7 @@ _SEARCH_COUNT = re.compile(r"Zobrazeno\s+([\d\s]+)-([\d\s]+)\s+inzerátů\s+z\s+
 _SEARCH_TITLE = re.compile(r'<h2 class=nadpis><a href="(/inzerat/(\d+)/[^"]*)">(.*?)</a>', re.S)
 _SEARCH_PRICE = re.compile(r'class="inzeratycena"><b>(.*?)</b>', re.S)
 _SEARCH_PLACE = re.compile(r'class="inzeratylok">([^<]*)<br>\s*([\d ]{5,6})')
+_SEARCH_DATE = re.compile(r'class=velikost10>.*?\[(\d{1,2})\.(\d{1,2})\.\s*(\d{4})\]', re.S)
 
 
 def _int(text: str) -> int:
@@ -160,13 +162,19 @@ def parse_search_page(page: str, base_url: str = "https://pc.bazos.cz") -> Searc
         seen.add(title.group(2))
         price = _SEARCH_PRICE.search(block)
         place = _SEARCH_PLACE.search(block)
+        listed = _SEARCH_DATE.search(block)
+        try:
+            listed_on = date(int(listed.group(3)), int(listed.group(2)), int(listed.group(1))) if listed else None
+        except ValueError:
+            listed_on = None
         hits.append(SearchHit(
             source_id=title.group(2),
             url=base_url.rstrip("/") + title.group(1),
             title=html_to_text(title.group(3)),
             price_raw=html_to_text(price.group(1)) if price else "",
             locality=html.unescape(place.group(1)).strip() if place else None,
-            postal_code=place.group(2).replace(" ", "") if place else None))
+            postal_code=place.group(2).replace(" ", "") if place else None,
+            listed_on=listed_on))
     if count:
         return SearchPage(_int(count.group(3)), _int(count.group(1)), _int(count.group(2)), hits)
     return SearchPage(None, None, None, hits)

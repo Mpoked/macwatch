@@ -220,6 +220,34 @@ class Pipeline:
         return self._assess_and_alert(row_to_item(row), row["price_czk"], supports_enrich,
                                       row["alerted_at"] is not None, stats, self._now())
 
+    def enrich_backlog(self, source: Source, budget: int) -> RunStats:
+        """Postupně stáhne detaily inzerátů přidaných z výpisu hledání, nejnovější první."""
+        stats = RunStats()
+        if budget <= 0 or not source.supports_enrich:
+            return stats
+        for row in self.db.detail_backlog(source.name, budget):
+            item = row_to_item(row)
+            now = self._now()
+            stats.details_fetched += 1
+            try:
+                item = privacy.redact(source.enrich(item))
+            except ListingGone:
+                self.db.mark_gone(item.key, now, "zmizel")
+                continue
+            except Exception as exc:
+                log.warning("detail %s nešel přečíst: %s", item.url, exc)
+                self.db.set_detail_status(item.key, "error")
+                stats.errors.append(f"{item.url}: {exc}")
+                continue
+            self.db.update_content(item, now)
+            price = parse_price_czk(item.price_raw)
+            if price_changed(row["price_czk"], row["price_raw"], price, item.price_raw):
+                self.db.update_price(item.key, price, item.price_raw, now)
+            self._assess_and_alert(item, price, True, row["alerted_at"] is not None, stats, now)
+        if stats.details_fetched:
+            log.info("%s: dostaženo %d detailů z výpisu hledání", source.name, stats.details_fetched)
+        return stats
+
     def reassess_active(self, enrich_sources: set[str]) -> RunStats:
         """Přepočítá posouzení všech aktivních inzerátů.
 

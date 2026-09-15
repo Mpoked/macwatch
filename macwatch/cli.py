@@ -150,7 +150,11 @@ class Service:
         for source in sources:
             if stop is not None and stop.is_set():
                 return
-            self.pipeline.run_source(source)
+            _, stats = self.pipeline.run_source(source)
+            if isinstance(source, BazosSource):
+                limit = self.pipeline.max_details if self.pipeline.max_details is not None \
+                    else source.cfg.max_details_per_poll
+                self.pipeline.enrich_backlog(source, limit - stats.details_fetched)
         self.pipeline.refresh()
         self.pipeline.reassess_active({s.name for s in sources if s.supports_enrich})
         bazos = next((s for s in sources if isinstance(s, BazosSource)), None)

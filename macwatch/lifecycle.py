@@ -14,10 +14,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from macwatch.db import Database
-from macwatch.parsing import parse_price_czk, parse_specs
+from macwatch import privacy
+from macwatch.models import RawListing
+from macwatch.parsing import parse_price_czk, parse_specs, passes_prefilter, ruled_out_by_title
 from macwatch.pricemodel import record_snapshot
 from macwatch.pipeline import Pipeline, RunStats, price_changed
 from macwatch.sources.bazos import BazosSource
@@ -25,6 +28,7 @@ from macwatch.sources.bazos import BazosSource
 log = logging.getLogger(__name__)
 
 RUN_NAME = "bazos:lifecycle"
+PRAGUE = ZoneInfo("Europe/Prague")
 PAGE_SIZE = 20
 RETRY_AFTER = timedelta(minutes=30)
 
@@ -37,6 +41,7 @@ class LifecycleStats:
     price_changes: int = 0
     confirmed_alive: int = 0
     gone: int = 0
+    added: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -80,9 +85,9 @@ class BazosLifecycle:
                 details_fetched=stats.confirmed_alive + stats.gone,
                 alerts_sent=alert_stats.alerts_sent, errors=len(stats.errors) + len(alert_stats.errors),
                 error_text="\n".join(stats.errors + alert_stats.errors)[:4000] or None)
-        log.info("životní cyklus: %d stránek%s, %d známých, %d změn ceny, %d zmizelo, %d ověřeno živých",
-                 stats.pages, "" if stats.complete else " (neúplné)", stats.seen_known,
-                 stats.price_changes, stats.gone, stats.confirmed_alive)
+        log.info("životní cyklus: %d stránek%s, %d známých, %d nově přidaných, %d změn ceny, %d zmizelo, "
+                 "%d ověřeno živých", stats.pages, "" if stats.complete else " (neúplné)", stats.seen_known,
+                 stats.added, stats.price_changes, stats.gone, stats.confirmed_alive)
         return stats
 
     def _record_price(self, key, price_raw: str, stats: LifecycleStats, alert_stats: RunStats) -> None:
@@ -103,6 +108,7 @@ class BazosLifecycle:
             for hit in page.hits:
                 key = ("bazos", hit.source_id)
                 if self.db.get_listing(key) is None:
+                    self._add_unknown(hit, stats)
                     continue
                 stats.seen_known += 1
                 self.db.mark_checked(key, self._now())
@@ -116,6 +122,30 @@ class BazosLifecycle:
                 return
             offset += PAGE_SIZE
         stats.errors.append(f"dosažen limit {self.source.cfg.lifecycle_max_pages} stránek hledání")
+
+    def _add_unknown(self, hit, stats: LifecycleStats) -> None:
+        """Inzerát, který nebyl v RSS (třeba vložený před spuštěním sběru), přidá do sledování.
+
+        Detail se stáhne postupně (Pipeline.enrich_backlog). Upozornění nepřijde, dokud
+        inzerát nesplní limit stáří, takže po prvním průchodu nepřijde lavina starých pingů.
+        """
+        if not passes_prefilter(hit.title, self.pipeline.cfg.parsing):
+            return
+        published = None
+        if hit.listed_on:
+            published = datetime.combine(hit.listed_on, time(12, 0), tzinfo=PRAGUE).astimezone(timezone.utc)
+        item = RawListing("bazos", hit.source_id, hit.url, hit.title, hit.price_raw, None, False, self._now(),
+                          category="pc", locality=hit.locality, postal_code=hit.postal_code,
+                          published_at=published)
+        item = privacy.redact(item)
+        now = self._now()
+        self.db.insert_listing(item, parse_price_czk(hit.price_raw), now)
+        self.db.set_status(item.key, None, published)
+        specs, assessment = self.pipeline.evaluate(item, parse_price_czk(hit.price_raw))
+        self.db.save_assessment(item.key, specs, assessment, now)
+        if ruled_out_by_title(specs):
+            self.db.set_detail_status(item.key, "skip")
+        stats.added += 1
 
     def _snapshot(self, hits) -> None:
         """Inzertní ceny všech nalezených inzerátů pro týdenní přepočet cenové tabulky."""

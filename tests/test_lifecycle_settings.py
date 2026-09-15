@@ -34,6 +34,12 @@ class TestSearchPage:
         assert hit.price_raw == "38 999 Kč"
         assert (hit.locality, hit.postal_code) == ("Praha 7", "17000")
 
+    def test_listing_date(self):
+        from datetime import date
+        page = parse_search_page(read_fixture("bazos", "search_page1.html"))
+        assert page.hits[0].listed_on == date(2026, 9, 14)
+        assert all(h.listed_on is not None for h in page.hits)
+
     def test_last_page(self):
         page = parse_search_page(read_fixture("bazos", "search_last.html"))
         assert (page.first, page.last, page.total) == (1441, 1450, 1450)
@@ -114,7 +120,9 @@ class TestLifecycle:
         assert db.get_listing(("bazos", "3"))["gone_at"] is not None
         assert db.get_listing(("bazos", "4"))["gone_at"] is None
         assert db.get_listing(("bazos", "1"))["gone_at"] is None
-        assert db.get_listing(("bazos", "99")) is None, "neznámé inzeráty se nepřidávají"
+        added = db.get_listing(("bazos", "99"))
+        assert added is not None and added["body_complete"] == 0, "neznámý MacBook se přidá a počká na detail"
+        assert stats.added == 1
         assert (stats.gone, stats.confirmed_alive) == (1, 1)
 
     def test_incomplete_pass_marks_nothing_gone(self, env):
@@ -202,3 +210,58 @@ class TestSettings:
         db = Database.open(":memory:")
         cfg = load_effective_config(path, db, T0)
         assert cfg.market.min_samples >= 1 and cfg.travel.road_factor >= 1
+
+
+class TestBacklog:
+    def test_unknown_listings_are_added_and_intel_titles_skipped(self, env):
+        from datetime import date
+        clock, db, pipeline = env
+        hits = [SearchHit("10", "https://pc.bazos.cz/inzerat/10/x.php", "Apple MacBook Pro 23\u201d 512GB", "10 999 Kč",
+                          "Zlín", "76001", date(2026, 9, 8)),
+                SearchHit("11", "https://pc.bazos.cz/inzerat/11/x.php", "MacBook Pro 2017 i5 8GB", "5 000 Kč",
+                          None, None, date(2026, 9, 9)),
+                SearchHit("12", "https://pc.bazos.cz/inzerat/12/x.php", "Lenovo ThinkPad", "4 000 Kč", None, None, None)]
+        stats = BazosLifecycle(StubSource([SearchPage(3, 1, 3, hits)], {}), db, pipeline, clock).run()
+        assert stats.added == 2
+        candidate = db.get_listing(("bazos", "10"))
+        assert candidate["detail_status"] is None and candidate["published_at"].startswith("2026-09-08")
+        assert candidate["locality"] == "Zlín"
+        assert db.get_listing(("bazos", "11"))["detail_status"] == "skip"
+        assert db.get_listing(("bazos", "12")) is None
+
+    def test_backlog_enriches_newest_first_without_old_alerts(self, cfg):
+        import dataclasses
+
+        from macwatch.pipeline import Pipeline
+        from tests.test_pipeline import FakeNotifier
+
+        clock = Clock()
+        db = Database.open(":memory:")
+        notifier = FakeNotifier()
+        pipeline = Pipeline(cfg, db, notifier, clock=clock)
+        for sid, day in (("1", 5), ("2", 9), ("3", 7)):
+            when = datetime(2026, 9, day, 10, 0, tzinfo=timezone.utc)
+            item = RawListing("bazos", sid, f"https://pc.bazos.cz/inzerat/{sid}/x.php", "Apple MacBook Pro 23",
+                              "5 000 Kč", None, False, when, published_at=when)
+            db.insert_listing(item, 5000, when)
+            db.set_status(item.key, None, when)
+
+        class Source:
+            name = "bazos"
+            supports_enrich = True
+            enriched = []
+
+            def enrich(self, item):
+                Source.enriched.append(item.source_id)
+                return dataclasses.replace(item, body="MacBook Air 13 Apple M1, 8 GB RAM, 256 GB SSD", body_complete=True,
+                                           title="Apple MacBook Air 23", price_raw="5 000 Kč")
+
+        stats = pipeline.enrich_backlog(Source(), 2)
+        assert Source.enriched == ["2", "3"], "nejnovější první, v rámci rozpočtu"
+        row = db.conn.execute("SELECT chip, verdict FROM assessments WHERE source_id = '2'").fetchone()
+        assert tuple(row) == ("m1", "KOUPIT")
+        assert notifier.sent == [], "starý inzerát z výpisu nepingne"
+        assert stats.details_fetched == 2
+        pipeline.enrich_backlog(Source(), 5)
+        assert Source.enriched == ["2", "3", "1"]
+        assert pipeline.enrich_backlog(Source(), 5).details_fetched == 0
