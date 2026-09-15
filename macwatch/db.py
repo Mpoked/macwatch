@@ -68,18 +68,42 @@ def migrate(conn: sqlite3.Connection, migrations: list[Migration], *,
     if current > 0 and db_path is not None:
         target = backup_database(conn, db_path, current, now or datetime.now())
         log.info("záloha databáze před migrací: %s", target)
+    applied = 0
     for migration in pending:
-        log.info("aplikuji migraci %s", migration.name)
-        script = f"BEGIN;\n{migration.sql}\nPRAGMA user_version = {migration.version};\nCOMMIT;"
+        # zámek pro zápis a nové ověření verze: dva procesy (služba a dashboard) mohou
+        # startovat současně a migraci mezitím mohl dokončit ten druhý
+        conn.execute("BEGIN IMMEDIATE")
         try:
-            conn.executescript(script)
+            if schema_version(conn) >= migration.version:
+                conn.rollback()
+                continue
+            log.info("aplikuji migraci %s", migration.name)
+            for statement in split_sql(migration.sql):
+                conn.execute(statement)
+            conn.execute(f"PRAGMA user_version = {migration.version}")
+            conn.commit()
+            applied += 1
         except sqlite3.Error:
             if conn.in_transaction:
                 conn.rollback()
             log.exception("migrace %s selhala, databáze zůstává ve verzi %d",
                           migration.name, schema_version(conn))
             raise
-    return len(pending)
+    return applied
+
+
+def split_sql(script: str) -> list[str]:
+    """Rozdělí SQL skript na jednotlivé příkazy (executescript by transakci potvrdil předčasně)."""
+    statements, buffer = [], ""
+    for line in script.splitlines(keepends=True):
+        buffer += line
+        if sqlite3.complete_statement(buffer):
+            if buffer.strip():
+                statements.append(buffer.strip())
+            buffer = ""
+    if buffer.strip() and not all(l.strip().startswith("--") or not l.strip() for l in buffer.splitlines()):
+        raise sqlite3.OperationalError(f"neúplný SQL příkaz v migraci: {buffer.strip()[:80]}")
+    return statements
 
 
 def _iso(value: datetime | None) -> str | None:

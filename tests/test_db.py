@@ -85,3 +85,34 @@ def test_same_id_on_different_sources_are_distinct():
     db.insert_listing(item(source="facebook"), 9500, NOW)
     assert db.get_listing(("facebook", "1"))["price_czk"] == 9500
     assert db.get_listing(("bazos", "1"))["price_czk"] == 8900
+
+
+def test_concurrent_start_does_not_fail(tmp_path, monkeypatch):
+    """Služba a dashboard startují zároveň: druhý proces migraci jen přeskočí."""
+    import macwatch.db as dbmod
+
+    path = tmp_path / "race.db"
+    migrations = bundled_migrations()
+    first = sqlite3.connect(path)
+    migrate(first, migrations[:-1], db_path=path)
+    second = sqlite3.connect(path)
+    real = dbmod.schema_version
+    calls = {"n": 0}
+
+    def stale(conn):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            migrate(first, migrations, db_path=path)   # mezitím doběhne jiný proces
+            return len(migrations) - 1                 # a my máme zastaralou verzi
+        return real(conn)
+
+    monkeypatch.setattr(dbmod, "schema_version", stale)
+    assert migrate(second, migrations, db_path=path) == 0
+    assert real(second) == len(migrations)
+
+
+def test_split_sql():
+    from macwatch.db import split_sql
+    script = "-- komentář\nCREATE TABLE a (x TEXT); -- poznámka\nALTER TABLE a ADD COLUMN y TEXT;\n"
+    assert split_sql(script) == ["-- komentář\nCREATE TABLE a (x TEXT); -- poznámka",
+                                 "ALTER TABLE a ADD COLUMN y TEXT;"]
