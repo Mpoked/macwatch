@@ -65,6 +65,13 @@ FIELDS: tuple[Field, ...] = (
     Field("market.min_samples", "int", "Minimum vzorků", "Trh"),
     Field("market.own_sale_weight", "int", "Váha vlastního prodeje", "Trh",
           "Kolikrát víc váží tvůj prodej než cizí zmizelý inzerát."),
+    Field("market.ram_pct_per_doubling", "float", "Přirážka za zdvojnásobení RAM (%)", "Trh",
+          "8 → 16 GB, 16 → 32 GB. Mezikroky poměrně."),
+    Field("market.ssd_pct_per_doubling", "float", "Přirážka za zdvojnásobení SSD (%)", "Trh",
+          "256 → 512 GB, 512 GB → 1 TB."),
+    Field("market.refit_interval_days", "float", "Přepočet cenové tabulky každých (dní)", "Trh"),
+    Field("market.auto_percentages", "bool", "Přepočet upraví i přirážky", "Trh",
+          "Vypni, když chceš přirážky nastavit ručně."),
 
     Field("travel.enabled", "bool", "Počítat cestu", "Dojezd"),
     Field("travel.home_psc", "str", "Domovské PSČ", "Dojezd"),

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from macwatch import fbconfig
+from macwatch import fbconfig, pricemodel
 from macwatch.config import AppConfig, ConfigError
 from macwatch.db import Database
 from macwatch.geo import default_gazetteer
@@ -17,6 +17,7 @@ from macwatch.market import market_overview, price_timeline, reference_book
 from macwatch.models import Specs
 from macwatch.settings import (
     FIELDS,
+    FIELDS_BY_PATH,
     SettingsStore,
     coerce,
     effective_value,
@@ -109,7 +110,8 @@ def origin_label(origin: str | None, samples: int | None) -> str:
     if not origin:
         return ""
     base, _, other = origin.partition(":")
-    text = f"z {samples} prodejů" if base == "measured" else "ruční"
+    text = {"measured": f"z {samples} prodejů", "table": "tabulka z inzerátů", "manual": "ruční, zamčeno",
+            "config": "starší ruční"}.get(base, base)
     if other:
         text += f", {SOURCE_LABELS.get(other, other)}"
     return text
@@ -413,62 +415,195 @@ def market_group(ctx: Ctx) -> Response:
 
 # ceny
 
+RAM_OPTIONS = [(str(v), f"{v} GB") for v in (8, 16, 18, 24, 32, 36, 48, 64, 96, 128)]
+SSD_BASE_OPTIONS = [(v, t) for v, t in SSD_OPTIONS if v]
+
+
+def model_name(family: str, chip: str) -> str:
+    return Specs(family=family, chip=chip).model_label().replace(" ?/?", "")
+
+
+def model_sort_key(key: str) -> tuple:
+    family, chip = key.split("|", 1)
+    generation = chip.split()[0]
+    variant = chip[len(generation):].strip()
+    return (family != "air", generation, {"": 0, "pro": 1, "max": 2}.get(variant, 3))
+
+
 def prices_page(ctx: Ctx) -> Response:
     cfg = ctx.cfg
-    store = SettingsStore(ctx.db)
-    manual = store.references()
-    book = reference_book(ctx.db.conn, cfg.market, cfg.pricing, ctx.now)
-    manual_rows = []
-    for key, price in manual.items():
-        source, family, chip, *ssd = key.split("|")
-        measured = book.measured.get(source, {}).get("|".join([family, chip, *ssd]))
-        manual_rows.append([
-            e(key),
-            (f'<form class=inline method=post action="/ceny/ulozit"><input type=hidden name=key value="{e(key)}">'
-             f'<input name=price_czk type=number min=1 step=100 value="{price}" style="width:110px"> '
-             f'<button class=ghost>Uložit</button></form>'),
-            e(czk(measured.price_czk)) + (f' <span class=muted>({measured.samples})</span>' if measured else "")
-            if measured else "·",
-            post_button("/ceny/smazat", "Smazat", {"key": key}, "ghost", "Smazat referenční cenu?"),
+    conn = ctx.db.conn
+    book = reference_book(conn, cfg.market, cfg.pricing, ctx.now)
+    fit_info = pricemodel.last_fit(conn)
+    fresh = conn.execute(
+        "SELECT COUNT(*) FROM asking_snapshots WHERE last_seen >= ? AND eligible = 1",
+        ((ctx.now - timedelta(days=pricemodel.FIT_WINDOW_DAYS)).isoformat(timespec="seconds"),)).fetchone()[0]
+    next_fit = "hned při dalším průchodu" if fit_info is None else when(
+        (datetime.fromisoformat(fit_info["at"]) + timedelta(days=cfg.market.refit_interval_days)).isoformat())
+    top = cards([
+        ("Přirážka za 2× RAM", e(f"+{num(cfg.market.ram_pct_per_doubling, 1)} %"), ""),
+        ("Přirážka za 2× SSD", e(f"+{num(cfg.market.ssd_pct_per_doubling, 1)} %"), ""),
+        ("Poslední přepočet", e(when(fit_info["at"])) if fit_info else "zatím nebyl", ""),
+        ("Inzerátů pro přepočet", str(fresh), ""),
+    ])
+    fit_note = ""
+    if fit_info:
+        fit_note = (f'<p class=muted>Poslední přepočet: {fit_info["models"]} modelů z {fit_info["samples"]} inzerátů, '
+                    f'cena podle tabulky se od inzerátu liší v mediánu o {e(num(fit_info["median_error_pct"], 1))} %. '
+                    f'Další přepočet: {e(next_fit)}.</p>')
+    controls = (
+        '<div class=panel><form method=post action="/ceny/prirazky"><div class=grid>'
+        + input_field("ram_pct", "Přirážka za zdvojnásobení RAM (%)", cfg.market.ram_pct_per_doubling, "number",
+                      attrs='step="0.1" min=0 max=100')
+        + input_field("ssd_pct", "Přirážka za zdvojnásobení SSD (%)", cfg.market.ssd_pct_per_doubling, "number",
+                      attrs='step="0.1" min=0 max=100')
+        + checkbox_field("auto_percentages", "Přepočet upraví i přirážky", cfg.market.auto_percentages)
+        + '</div><p><button>Uložit přirážky</button></p></form>'
+        + post_button("/ceny/prepocitat", "Přepočítat tabulku z inzerátů teď", {}, "")
+        + f'{fit_note}</div>')
+
+    rows = []
+    for key in sorted(book.models, key=model_sort_key):
+        model = book.models[key]
+        family, chip = model.family, model.chip
+        used = book.lookup("bazos", family, chip, model.base_ssd_gb, model.base_ram_gb)
+        measured = book.measured.get("bazos", {}).get(key)
+        double_ram = book.lookup("bazos", family, chip, model.base_ssd_gb, model.base_ram_gb * 2)
+        double_ssd = book.lookup("bazos", family, chip, model.base_ssd_gb * 2, model.base_ram_gb)
+        edit = (f'<form class=inline method=post action="/ceny/model">'
+                f'<input type=hidden name=family value="{e(family)}"><input type=hidden name=chip value="{e(chip)}">'
+                + _select("base_ram_gb", RAM_OPTIONS, model.base_ram_gb) + " / "
+                + _select("base_ssd_gb", SSD_BASE_OPTIONS, model.base_ssd_gb)
+                + f' <input name=base_price_czk type=number min=1 step=100 value="{model.base_price_czk}" style="width:100px">'
+                  ' <button class=ghost title="Uloží a zamkne, týdenní přepočet ho pak nepřepíše">Uložit</button></form>')
+        origin = ('<span class="badge warn">zamčeno ručně</span>' if model.locked
+                  else f'<span class=muted>z {model.samples} inzerátů, {e(when(model.updated_at))}</span>')
+        actions = (post_button("/ceny/model/odemknout", "Odemknout", {"family": family, "chip": chip})
+                   if model.locked else "") + " " + post_button(
+            "/ceny/model/smazat", "Smazat", {"family": family, "chip": chip}, "ghost", "Smazat řádek tabulky?")
+        rows.append([
+            e(model_name(family, chip)), edit, origin,
+            (e(czk(measured.price_czk)) + f' <span class=muted>({measured.samples})</span>') if measured else "·",
+            (e(czk(used[0])) + f'<br><span class=muted>{e(origin_label(used[2], used[3]))}</span>') if used else "·",
+            f'{e(czk(double_ram[0]))} <span class=muted>({model.base_ram_gb * 2} GB)</span>' if double_ram else "·",
+            f'{e(czk(double_ssd[0]))} <span class=muted>({ssd_label(model.base_ssd_gb * 2)})</span>' if double_ssd else "·",
+            actions,
         ])
-    measured_rows = []
-    for source, groups in sorted(book.measured.items()):
-        for group, m in sorted(groups.items()):
-            family, chip, *ssd = group.split("|")
-            used = book.lookup(source, family, chip, int(ssd[0]) if ssd else None)
-            in_use = used is not None and used[2] == "measured" and used[1] == f"{source}|{group}"
-            measured_rows.append([e(f"{source}|{group}"), e(czk(m.price_czk)), str(m.samples), str(m.own_sales),
-                                  '<span class="badge good">používá se</span>' if in_use else
-                                  f'<span class=muted>málo vzorků (min. {book.min_samples})</span>'
-                                  if m.samples < book.min_samples else '<span class=muted>ruční režim</span>'])
-    missing = ctx.db.conn.execute(
-        """SELECT l.source, a.family, a.chip, a.ssd_gb, COUNT(*) AS n,
-                  CAST(AVG(l.price_czk) AS INTEGER) AS avg_price
+    model_table = table(
+        [("Model", ""), ("Základní konfigurace a cena", ""), ("Původ", ""), ("Naměřeno z prodejů", "num"),
+         ("Používá se", "num"), ("2× RAM", "num"), ("2× SSD", "num"), ("", "")],
+        rows, "Tabulka je prázdná. Spusť přepočet z inzerátů, nebo přidej model ručně.")
+
+    add_form = (
+        '<form method=post action="/ceny/model" class=panel><div class=grid>'
+        + select_field("family", "Rodina", FAMILY_OPTIONS[1:], ctx.req.arg("family", "air"))
+        + input_field("chip", "Čip", ctx.req.arg("chip"), help_text="např. m2, m3 pro, m4 max", required=True)
+        + select_field("base_ram_gb", "Základní RAM", RAM_OPTIONS, ctx.req.arg("ram", "8"))
+        + select_field("base_ssd_gb", "Základní SSD", SSD_BASE_OPTIONS, ctx.req.arg("ssd", "256"))
+        + input_field("base_price_czk", "Cena základní konfigurace (Kč)", "", "number", required=True,
+                      attrs="min=1 step=100")
+        + "</div><p><button>Přidat nebo přepsat a zamknout</button></p></form>")
+
+    missing = conn.execute(
+        """SELECT a.family, a.chip, COUNT(*) AS n, CAST(AVG(l.price_czk) AS INTEGER) AS avg_price
            FROM listings l JOIN assessments a USING (source, source_id)
            WHERE a.verdict = 'NEZNAMY_MODEL' AND l.gone_at IS NULL AND a.chip IS NOT NULL
-           GROUP BY l.source, a.family, a.chip, a.ssd_gb ORDER BY n DESC LIMIT 30""").fetchall()
-    missing_rows = [[e(f'{"bazos"}|{r["family"]}|{r["chip"]}' + (f'|{r["ssd_gb"]}' if r["ssd_gb"] else "")),
-                     source_label(r["source"]), str(r["n"]), e(czk(r["avg_price"]))] for r in missing]
-    add_form = (
-        '<form method=post action="/ceny/ulozit" class=panel><div class=grid>'
-        + input_field("key", "Klíč", ctx.req.arg("key"), help_text="zdroj|rodina|čip|ssd, např. bazos|pro|m2 pro|512",
-                      required=True)
-        + input_field("price_czk", "Cena (Kč)", "", "number", required=True, attrs="min=1 step=100")
-        + "</div><p><button>Přidat nebo přepsat</button></p></form>")
-    mode = "naměřená cena, když je dost vzorků, jinak ruční" if cfg.market.reference_mode == "auto" else "jen ruční tabulka"
-    body = ("<h1>Referenční ceny</h1>"
-            f'<p class=muted>Režim: {e(mode)}. Změníš v <a href="/nastaveni">nastavení</a>. '
-            "Klíč bez SSD platí pro všechny velikosti disku, pro Marketplace se bez vlastní ceny použije Bazoš.</p>"
-            + add_form
-            + "<h2>Ruční ceny</h2>"
-            + table([("Klíč", ""), ("Cena", ""), ("Naměřeno", "num"), ("", "")], manual_rows, "Žádné ruční ceny.")
-            + "<h2>Naměřeno z trhu a vlastních prodejů</h2>"
-            + table([("Skupina", ""), ("Medián", "num"), ("Vzorků", "num"), ("Z toho vlastní prodeje", "num"), ("Stav", "")],
-                    measured_rows, "Zatím nic nezmizelo ani se neprodalo.")
-            + "<h2>Chybí v tabulce</h2><p class=muted>Aktivní MacBooky, pro které není reference. Klíč stačí zkopírovat do formuláře výš.</p>"
-            + table([("Navržený klíč", ""), ("Zdroj", ""), ("Inzerátů", "num"), ("Průměrná cena", "num")], missing_rows,
-                    "Všechny modely mají referenci."))
+           GROUP BY a.family, a.chip ORDER BY n DESC LIMIT 30""").fetchall()
+    missing_rows = [[e(model_name(r["family"], r["chip"])), str(r["n"]), e(czk(r["avg_price"])),
+                     f'<a href="{e(url_with("/ceny", family=r["family"], chip=r["chip"]))}#pridat">přidat</a>']
+                    for r in missing]
+
+    manual = SettingsStore(ctx.db).references()
+    manual_rows = [[
+        e(key),
+        (f'<form class=inline method=post action="/ceny/ulozit"><input type=hidden name=key value="{e(key)}">'
+         f'<input name=price_czk type=number min=1 step=100 value="{price}" style="width:110px"> '
+         f'<button class=ghost>Uložit</button></form>'),
+        post_button("/ceny/smazat", "Smazat", {"key": key}, "ghost", "Smazat referenční cenu?"),
+    ] for key, price in manual.items()]
+
+    body = ("<h1>Ceny</h1>"
+            "<p class=muted>Reference kusu = cena základní konfigurace modelu, upravená přirážkami za RAM a SSD. "
+            "Odkud se bere: 1. řádek, který jsi uložil ručně (zamčený), 2. naměřené prodeje, když jich je aspoň "
+            f"{cfg.market.min_samples}, 3. tabulka z inzertních cen, přepočítaná každých "
+            f"{e(num(cfg.market.refit_interval_days))} dní, 4. starší ruční ceny s klíčem.</p>"
+            + top + controls
+            + "<h2>Cenová tabulka</h2>" + model_table
+            + '<h2 id=pridat>Přidat model</h2>' + add_form
+            + "<h2>Chybí v tabulce</h2>"
+            + table([("Model", ""), ("Aktivních inzerátů", "num"), ("Průměrná cena", "num"), ("", "")], missing_rows,
+                    "Všechny aktivní MacBooky mají referenci.")
+            + "<h2>Starší ruční ceny</h2><p class=muted>Klíč zdroj|rodina|čip|ssd, platí jen tam, kde tabulka "
+              "model nemá. Nové ceny zadávej raději do tabulky výš.</p>"
+            + table([("Klíč", ""), ("Cena", ""), ("", "")], manual_rows, "Žádné.")
+            + '<form method=post action="/ceny/ulozit" class=panel><div class=grid>'
+            + input_field("key", "Klíč", "", help_text="např. bazos|pro|m2 pro|512", required=True)
+            + input_field("price_czk", "Cena (Kč)", "", "number", required=True, attrs="min=1 step=100")
+            + "</div><p><button class=ghost>Přidat starší ruční cenu</button></p></form>")
     return ctx.page("Ceny", "/ceny", body)
+
+
+def _select(name: str, options: list[tuple[str, str]], selected: object) -> str:
+    return (f'<select name="{e(name)}">' + "".join(
+        f'<option value="{e(v)}"{" selected" if str(v) == str(selected) else ""}>{e(t)}</option>'
+        for v, t in options) + "</select>")
+
+
+def ssd_label(gb: int) -> str:
+    return f"{gb // 1024} TB" if gb >= 1024 else f"{gb} GB"
+
+
+def prices_model_save(ctx: Ctx) -> Response:
+    form = ctx.req.form
+    try:
+        family = form.get("family", "")
+        chip = " ".join(form.get("chip", "").lower().split())
+        if family not in ("air", "pro") or not chip:
+            raise ValueError("rodina musí být air nebo pro a čip nesmí být prázdný")
+        model = pricemodel.PriceModel(family, chip, int(form.get("base_ram_gb", "")), int(form.get("base_ssd_gb", "")),
+                                      int(form.get("base_price_czk", "").replace(" ", "")), locked=True)
+        if model.base_price_czk <= 0:
+            raise ValueError("cena musí být kladná")
+        pricemodel.save_model(ctx.db.conn, model, ctx.now)
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        return redirect("/ceny", f"Neuloženo: {exc}", "bad")
+    recompute(ctx)
+    return redirect("/ceny", f"{model_name(family, chip)} uložen a zamčen, posouzení přepočítáno.")
+
+
+def prices_model_unlock(ctx: Ctx) -> Response:
+    pricemodel.set_locked(ctx.db.conn, ctx.req.form.get("family", ""), ctx.req.form.get("chip", ""), False)
+    return redirect("/ceny", "Řádek odemčen, při dalším přepočtu ho nahradí cena z inzerátů.")
+
+
+def prices_model_delete(ctx: Ctx) -> Response:
+    pricemodel.delete_model(ctx.db.conn, ctx.req.form.get("family", ""), ctx.req.form.get("chip", ""))
+    recompute(ctx)
+    return redirect("/ceny", "Řádek tabulky smazán, posouzení přepočítáno.")
+
+
+def prices_percentages_save(ctx: Ctx) -> Response:
+    form = ctx.req.form
+    try:
+        values = {
+            "market.ram_pct_per_doubling": coerce(FIELDS_BY_PATH["market.ram_pct_per_doubling"], form.get("ram_pct")),
+            "market.ssd_pct_per_doubling": coerce(FIELDS_BY_PATH["market.ssd_pct_per_doubling"], form.get("ssd_pct")),
+            "market.auto_percentages": bool(form.get("auto_percentages")),
+        }
+        validate_and_save(ctx.app.config_path, ctx.db, values, ctx.now)
+    except ConfigError as exc:
+        return redirect("/ceny", f"Neuloženo: {exc}", "bad")
+    recompute(ctx)
+    return redirect("/ceny", "Přirážky uloženy, posouzení přepočítáno.")
+
+
+def prices_refit(ctx: Ctx) -> Response:
+    result = pricemodel.refit(ctx.db.conn, ctx.now, update_percentages=ctx.cfg.market.auto_percentages)
+    if result is None:
+        return redirect("/ceny", "Na přepočet je málo inzerátů. Počkej na kontrolu životního cyklu, "
+                                 "běží každé 3 hodiny.", "bad")
+    recompute(ctx)
+    return redirect("/ceny", f"Tabulka přepočítána z {result.samples} inzerátů, posouzení přepočítáno.")
 
 
 def prices_save(ctx: Ctx) -> Response:
@@ -920,6 +1055,11 @@ ROUTES = [
     ("GET", "/ceny", prices_page),
     ("POST", "/ceny/ulozit", prices_save),
     ("POST", "/ceny/smazat", prices_delete),
+    ("POST", "/ceny/model", prices_model_save),
+    ("POST", "/ceny/model/odemknout", prices_model_unlock),
+    ("POST", "/ceny/model/smazat", prices_model_delete),
+    ("POST", "/ceny/prirazky", prices_percentages_save),
+    ("POST", "/ceny/prepocitat", prices_refit),
     ("GET", "/sklad", inventory_page),
     ("GET", "/sklad/novy", inventory_new),
     ("POST", "/sklad/novy", inventory_create),

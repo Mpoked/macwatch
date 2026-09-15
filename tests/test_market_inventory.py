@@ -54,7 +54,7 @@ class TestSoldSamples:
         add_listing(db, "active", 5000, start)
         book = reference_book(db.conn, cfg.market, cfg.pricing, NOW)
         hit = book.lookup("bazos", "air", "m1", 256)
-        assert hit == (9000, "bazos|air|m1|256", "measured", 3)
+        assert hit == (9000, "bazos|air|m1", "measured", 3)
 
     def test_manual_used_until_enough_samples(self, db, cfg):
         start = NOW - timedelta(days=30)
@@ -74,18 +74,22 @@ class TestSoldSamples:
         for i, ssd in enumerate((256, 512, 1024)):
             add_listing(db, str(i), 10000 + i * 1000, start, start + timedelta(days=2), ssd=ssd)
         book = reference_book(db.conn, cfg.market, cfg.pricing, NOW)
-        assert book.lookup("bazos", "air", "m1", 2048)[:3] == (11000, "bazos|air|m1", "measured")
+        # 512 a 1 TB se přepočtou na 256 GB (−11 % za zdvojnásobení), pak zpět na 2 TB
+        base = sorted([10000, 11000 / 1.11, 12000 / 1.11 ** 2])[1]
+        price, key, origin, samples = book.lookup("bazos", "air", "m1", 2048)
+        assert (key, origin, samples) == ("bazos|air|m1", "measured", 3)
+        assert price == pytest.approx(base * 1.11 ** 3, abs=2)
 
 
 def test_own_sales_weigh_more():
     from macwatch.market import Sample
-    samples = [Sample("air|m1|256", "bazos", p, 3, "x") for p in (9000, 9200, 9400)]
-    samples.append(Sample("air|m1|256", "vlastni", 11000, 5, "x", weight=3))
+    samples = [Sample("air", "m1", 8, 256, "bazos", p, 3, "x") for p in (9000, 9200, 9400)]
+    samples.append(Sample("air", "m1", 8, 256, "vlastni", 11000, 5, "x", weight=3))
     measured = build_measured(samples)
     # bez vlastního prodeje by medián byl 9 200, prodej s váhou 3 ho vytáhne na 10 200
-    assert measured["bazos"]["air|m1|256"].price_czk == 10200
-    assert measured["bazos"]["air|m1|256"].own_sales == 1
-    assert measured["facebook"]["air|m1|256"].price_czk == 11000  # vlastní prodej platí všude
+    assert measured["bazos"]["air|m1"].price_czk == 10200
+    assert measured["bazos"]["air|m1"].own_sales == 1
+    assert measured["facebook"]["air|m1"].price_czk == 11000  # vlastní prodej platí všude
 
 
 def test_book_falls_back_to_other_source():
@@ -170,7 +174,7 @@ class TestInventory:
             inv.add(dict(title="Air", family="air", chip="m2", ssd_gb=512, bought_at="2026-09-01",
                          buy_price_czk=10000, sold_at="2026-09-10", sale_price_czk=price), NOW)
         book = reference_book(db.conn, cfg.market, cfg.pricing, NOW)
-        assert book.lookup("facebook", "air", "m2", 512)[:3] == (13500, "facebook|air|m2|512", "measured")
+        assert book.lookup("facebook", "air", "m2", 512)[:3] == (13500, "facebook|air|m2", "measured")
 
     def test_unknown_cost_kind(self, db):
         inv = Inventory(db.conn)

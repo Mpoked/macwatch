@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from macwatch.db import Database
-from macwatch.parsing import parse_price_czk
+from macwatch.parsing import parse_price_czk, parse_specs
+from macwatch.pricemodel import record_snapshot
 from macwatch.pipeline import Pipeline, RunStats, price_changed
 from macwatch.sources.bazos import BazosSource
 
@@ -98,6 +99,7 @@ class BazosLifecycle:
         for _ in range(self.source.cfg.lifecycle_max_pages):
             page = self.source.search_page(offset)
             stats.pages += 1
+            self._snapshot(page.hits)
             for hit in page.hits:
                 key = ("bazos", hit.source_id)
                 if self.db.get_listing(key) is None:
@@ -114,6 +116,16 @@ class BazosLifecycle:
                 return
             offset += PAGE_SIZE
         stats.errors.append(f"dosažen limit {self.source.cfg.lifecycle_max_pages} stránek hledání")
+
+    def _snapshot(self, hits) -> None:
+        """Inzertní ceny všech nalezených inzerátů pro týdenní přepočet cenové tabulky."""
+        rows = []
+        for hit in hits:
+            specs = parse_specs(hit.title, "", self.pipeline.cfg.parsing)
+            rows.append(("bazos", hit.source_id, hit.title, parse_price_czk(hit.price_raw), int(specs.eligible),
+                         specs.family, specs.chip, specs.ram_gb, specs.ssd_gb))
+        if rows:
+            record_snapshot(self.db.conn, rows, self._now())
 
     def _confirm_unseen(self, stats: LifecycleStats, started: datetime, alert_stats: RunStats) -> None:
         budget = self.source.cfg.lifecycle_confirm_per_pass

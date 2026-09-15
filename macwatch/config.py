@@ -40,6 +40,10 @@ class MarketConfig:
     lookback_days: int = 120
     min_samples: int = 3
     own_sale_weight: int = 3
+    ram_pct_per_doubling: float = 18.0    # přirážka za každé zdvojnásobení RAM v %
+    ssd_pct_per_doubling: float = 11.0    # přirážka za každé zdvojnásobení SSD v %
+    refit_interval_days: float = 7.0      # jak často přepočítat cenovou tabulku z inzerátů
+    auto_percentages: bool = True         # přepočet upraví i přirážky
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,7 +205,15 @@ def parse_market(data: dict[str, Any]) -> MarketConfig:
         lookback_days=int(data.get("lookback_days", 120)),
         min_samples=int(data.get("min_samples", 3)),
         own_sale_weight=int(data.get("own_sale_weight", 3)),
+        ram_pct_per_doubling=float(data.get("ram_pct_per_doubling", 18.0)),
+        ssd_pct_per_doubling=float(data.get("ssd_pct_per_doubling", 11.0)),
+        refit_interval_days=float(data.get("refit_interval_days", 7.0)),
+        auto_percentages=bool(data.get("auto_percentages", True)),
     )
+    if not 0 <= cfg.ram_pct_per_doubling <= 100 or not 0 <= cfg.ssd_pct_per_doubling <= 100:
+        raise ConfigError("market: přirážky za RAM a SSD musí být 0 až 100 %")
+    if cfg.refit_interval_days < 1:
+        raise ConfigError("market: přepočet tabulky nejčastěji jednou za den")
     if min(cfg.sold_within_days, cfg.lookback_days, cfg.min_samples, cfg.own_sale_weight) < 1:
         raise ConfigError("market: počty dní, vzorků a váha musí být aspoň 1")
     return cfg

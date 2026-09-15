@@ -16,6 +16,7 @@ from macwatch.config import AppConfig, ConfigError, load_config
 from macwatch.db import Database
 from macwatch.geo import default_gazetteer
 from macwatch.lifecycle import BazosLifecycle
+from macwatch.pricemodel import MIN_TOTAL_SAMPLES, asking_samples, refit, refit_due
 from macwatch.settings import load_effective_config
 from macwatch.models import Verdict
 from macwatch.notify import DiscordNotifier, format_czk
@@ -53,6 +54,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     mode.add_argument("--web", action="store_true", help="spustit webový dashboard")
     mode.add_argument("--lifecycle", action="store_true",
                       help="hned spustit kontrolu životního cyklu na Bazoši a skončit")
+    mode.add_argument("--refit-prices", action="store_true",
+                      help="přepočítat cenovou tabulku z uložených inzertních cen a vypsat ji")
     parser.add_argument("--host", default="127.0.0.1", help="adresa dashboardu (výchozí 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8080, help="port dashboardu (výchozí 8080)")
     parser.add_argument("--details", type=int, default=None,
@@ -156,6 +159,11 @@ class Service:
         checker = BazosLifecycle(bazos, self.db, self.pipeline, _utcnow)
         if lifecycle == "force" or checker.due():
             checker.run()
+        if refit_due(self.db.conn, _utcnow(), self.cfg.market.refit_interval_days) and \
+                len(asking_samples(self.db.conn, _utcnow())) >= MIN_TOTAL_SAMPLES:
+            if refit(self.db.conn, _utcnow(), update_percentages=self.cfg.market.auto_percentages):
+                self.reload()
+                self.pipeline.reassess_active({s.name for s in sources if s.supports_enrich})
 
 
 def run_service(config_path: Path, *, once: bool, details: int | None) -> int:
@@ -215,6 +223,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.web:
         from macwatch.web.server import serve
         return serve(args.config, cfg, args.host, args.port)
+    if args.refit_prices:
+        db = Database.open(cfg.database)
+        try:
+            cfg = load_effective_config(args.config, db, _utcnow())
+            result = refit(db.conn, _utcnow(), update_percentages=cfg.market.auto_percentages)
+            if result is None:
+                log.error("málo inzertních cen, nejdřív spusť --lifecycle")
+                return 1
+            print(f"RAM +{result.ram_pct} % a SSD +{result.ssd_pct} % za zdvojnásobení, "
+                  f"{result.samples} inzerátů, medián chyby {result.median_error_pct} %")
+            for key, model in sorted(result.models.items()):
+                print(f"  {key:<16} {model.base_ram_gb}/{model.base_ssd_gb}  {model.base_price_czk:>7} Kč"
+                      f"  ({model.samples} inzerátů)")
+        finally:
+            db.close()
+        return 0
     if args.lifecycle:
         db = Database.open(cfg.database)
         try:

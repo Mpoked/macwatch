@@ -63,6 +63,8 @@ def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
     origin = assessment.reference_origin or ""
     if origin.startswith("measured"):
         lines.append(f"Reference z {assessment.reference_samples} prodaných kusů")
+    elif origin == "table":
+        lines.append("Reference z cenové tabulky")
     if ":" in origin:
         other = origin.split(":", 1)[1]
         lines.append(f"Reference převzatá z {_SOURCE_GENITIVE.get(other, other)}")

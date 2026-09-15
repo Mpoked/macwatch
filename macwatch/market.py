@@ -14,16 +14,29 @@ from datetime import datetime, timedelta
 from statistics import mean, median
 
 from macwatch.config import MarketConfig, PricingConfig
+from macwatch.pricemodel import DEFAULT_BASE, PriceModel, config_factor, load_models
 
 
 @dataclass(frozen=True, slots=True)
 class Sample:
-    group: str          # rodina|čip|ssd
+    family: str
+    chip: str
+    ram_gb: int | None
+    ssd_gb: int | None
     source: str         # bazos, facebook, vlastni
     price_czk: int
     days_listed: float | None
     at: str
     weight: int = 1
+
+    @property
+    def model_key(self) -> str:
+        return f"{self.family}|{self.chip}"
+
+    @property
+    def group(self) -> str:
+        """Skupina pro přehledy: rodina|čip|ssd."""
+        return group_key(self.family, self.chip, self.ssd_gb) or self.model_key
 
 
 def weighted_median(values: list[tuple[float, int]]) -> float | None:
@@ -54,111 +67,141 @@ def sold_listing_samples(conn: sqlite3.Connection, cfg: MarketConfig, now: datet
     since = (now - timedelta(days=cfg.lookback_days)).isoformat(timespec="seconds")
     rows = conn.execute(
         """SELECT l.source, l.price_czk, l.first_seen, l.gone_at,
-                  julianday(l.gone_at) - julianday(l.first_seen) AS days,
-                  a.family, a.chip, a.ssd_gb
+                  julianday(l.gone_at) - julianday(COALESCE(l.published_at, l.first_seen)) AS days,
+                  a.family, a.chip, a.ram_gb, a.ssd_gb
            FROM listings l JOIN assessments a USING (source, source_id)
            WHERE l.gone_at IS NOT NULL AND l.gone_at >= ?
              AND l.price_czk > 0 AND a.eligible = 1 AND a.is_dealer = 0
-             AND a.red_flags = '[]'
-             AND julianday(l.gone_at) - julianday(l.first_seen) <= ?""",
+             AND a.red_flags = '[]' AND a.family IS NOT NULL AND a.chip IS NOT NULL
+             AND julianday(l.gone_at) - julianday(COALESCE(l.published_at, l.first_seen)) <= ?""",
         (since, cfg.sold_within_days)).fetchall()
-    samples = []
-    for row in rows:
-        key = group_key(row["family"], row["chip"], row["ssd_gb"])
-        if key:
-            samples.append(Sample(key, row["source"], row["price_czk"], row["days"], row["gone_at"]))
-    return samples
+    return [Sample(r["family"], r["chip"], r["ram_gb"], r["ssd_gb"], r["source"], r["price_czk"],
+                   r["days"], r["gone_at"]) for r in rows]
 
 
 def own_sale_samples(conn: sqlite3.Connection, cfg: MarketConfig, now: datetime) -> list[Sample]:
     since = (now - timedelta(days=cfg.lookback_days)).date().isoformat()
     rows = conn.execute(
-        """SELECT family, chip, ssd_gb, sale_price_czk, sold_at,
+        """SELECT family, chip, ram_gb, ssd_gb, sale_price_czk, sold_at,
                   julianday(sold_at) - julianday(COALESCE(listed_at, bought_at)) AS days
            FROM inventory
-           WHERE sold_at IS NOT NULL AND sold_at >= ? AND sale_price_czk > 0""",
+           WHERE sold_at IS NOT NULL AND sold_at >= ? AND sale_price_czk > 0
+             AND family IS NOT NULL AND chip IS NOT NULL""",
         (since,)).fetchall()
-    samples = []
-    for row in rows:
-        key = group_key(row["family"], row["chip"], row["ssd_gb"])
-        if key:
-            samples.append(Sample(key, "vlastni", row["sale_price_czk"], row["days"], row["sold_at"],
-                                  cfg.own_sale_weight))
-    return samples
+    return [Sample(r["family"], r["chip"], r["ram_gb"], r["ssd_gb"], "vlastni", r["sale_price_czk"],
+                   r["days"], r["sold_at"], cfg.own_sale_weight) for r in rows]
 
 
 @dataclass(frozen=True, slots=True)
 class Measured:
-    price_czk: int
+    price_czk: int       # cena přepočtená na základní konfiguraci
     samples: int         # počet vzorků bez vah
     own_sales: int
+    base_ram_gb: int = DEFAULT_BASE[0]
+    base_ssd_gb: int = DEFAULT_BASE[1]
 
 
 @dataclass(slots=True)
 class ReferenceBook:
-    """Referenční ceny pro posouzení. Klíč bez zdroje: rodina|čip[|ssd]."""
+    """Referenční ceny pro posouzení.
+
+    Pořadí: zamčený řádek cenové tabulky, naměřené prodeje (přepočtené na konfiguraci),
+    řádek tabulky odhadnutý z inzerátů, staré ruční ceny s klíčem zdroj|rodina|čip[|ssd].
+    """
 
     manual: dict[str, int]
-    measured: dict[str, dict[str, Measured]] = field(default_factory=dict)   # zdroj -> skupina -> hodnota
+    measured: dict[str, dict[str, Measured]] = field(default_factory=dict)   # zdroj -> rodina|čip -> hodnota
     mode: str = "auto"
     min_samples: int = 3
     fallback_source: str | None = None
+    models: dict[str, PriceModel] = field(default_factory=dict)
+    ram_pct: float = 18.0
+    ssd_pct: float = 11.0
 
-    def lookup(self, source: str, family: str | None, chip: str | None,
-               ssd_gb: int | None) -> tuple[int, str, str, int] | None:
-        """Vrátí (cena, klíč, původ, počet vzorků). Původ: measured, config, config:zdroj."""
+    def _scale(self, base_price: int, base_ram: int, base_ssd: int, ram_gb: int | None,
+               ssd_gb: int | None) -> int:
+        return round(base_price * config_factor(ram_gb, ssd_gb, base_ram, base_ssd, self.ram_pct, self.ssd_pct))
+
+    def lookup(self, source: str, family: str | None, chip: str | None, ssd_gb: int | None,
+               ram_gb: int | None = None) -> tuple[int, str, str, int] | None:
+        """Vrátí (cena, klíč, původ, počet vzorků).
+
+        Původ: manual (zamčená tabulka), measured[:zdroj], table (tabulka z inzerátů),
+        config[:zdroj] (staré ruční ceny).
+        """
         if not family or not chip:
             return None
-        groups = [f"{family}|{chip}|{ssd_gb}"] if ssd_gb else []
-        groups.append(f"{family}|{chip}")
+        key = f"{family}|{chip}"
         sources = [source]
         if self.fallback_source and self.fallback_source != source:
             sources.append(self.fallback_source)
+        model = self.models.get(key)
+        if model and model.locked:
+            price = self._scale(model.base_price_czk, model.base_ram_gb, model.base_ssd_gb, ram_gb, ssd_gb)
+            return price, f"model|{key}", "manual", 0
+        if self.mode == "auto":
+            for src in sources:
+                hit = self.measured.get(src, {}).get(key)
+                if hit and hit.samples >= self.min_samples:
+                    suffix = "" if src == source else f":{src}"
+                    price = self._scale(hit.price_czk, hit.base_ram_gb, hit.base_ssd_gb, ram_gb, ssd_gb)
+                    return price, f"{src}|{key}", "measured" + suffix, hit.samples
+        if model:
+            price = self._scale(model.base_price_czk, model.base_ram_gb, model.base_ssd_gb, ram_gb, ssd_gb)
+            return price, f"model|{key}", "table", model.samples
+        groups = ([f"{key}|{ssd_gb}"] if ssd_gb else []) + [key]
         for src in sources:
             suffix = "" if src == source else f":{src}"
             for group in groups:
-                if self.mode == "auto":
-                    hit = self.measured.get(src, {}).get(group)
-                    if hit and hit.samples >= self.min_samples:
-                        return hit.price_czk, f"{src}|{group}", "measured" + suffix, hit.samples
-                key = f"{src}|{group}"
-                if key in self.manual:
-                    return self.manual[key], key, "config" + suffix, 0
+                manual_key = f"{src}|{group}"
+                if manual_key in self.manual:
+                    return self.manual[manual_key], manual_key, "config" + suffix, 0
         return None
 
 
-def build_measured(samples: list[Sample]) -> dict[str, dict[str, Measured]]:
-    """Seskupí vzorky po zdrojích a skupinách. Vlastní prodeje se přidají ke každému zdroji.
+def build_measured(samples: list[Sample], models: dict[str, PriceModel] | None = None,
+                   ram_pct: float = 18.0, ssd_pct: float = 11.0) -> dict[str, dict[str, Measured]]:
+    """Seskupí prodeje po zdrojích a modelech a přepočte je na základní konfiguraci modelu.
 
-    Vzorek s SSD se počítá i do obecné skupiny rodina|čip.
+    Díky přepočtu se sečtou všechny konfigurace jednoho modelu (8/256 i 16/512).
+    Vlastní prodeje se přidají ke každému zdroji.
     """
+    models = models or {}
     by_source: dict[str, dict[str, list[Sample]]] = defaultdict(lambda: defaultdict(list))
     sources = {s.source for s in samples if s.source != "vlastni"} | {"bazos", "facebook"}
     for sample in samples:
         targets = sources if sample.source == "vlastni" else {sample.source}
-        generic = "|".join(sample.group.split("|")[:2])
         for src in targets:
-            by_source[src][sample.group].append(sample)
-            if generic != sample.group:
-                by_source[src][generic].append(sample)
+            by_source[src][sample.model_key].append(sample)
     result: dict[str, dict[str, Measured]] = {}
     for src, groups in by_source.items():
         result[src] = {}
-        for group, items in groups.items():
-            value = weighted_median([(s.price_czk, s.weight) for s in items])
+        for key, items in groups.items():
+            model = models.get(key)
+            base_ram, base_ssd = (model.base_ram_gb, model.base_ssd_gb) if model else DEFAULT_BASE
+            normalized = [(s.price_czk / config_factor(s.ram_gb, s.ssd_gb, base_ram, base_ssd, ram_pct, ssd_pct),
+                           s.weight) for s in items]
+            value = weighted_median(normalized)
             if value is None:
                 continue
-            result[src][group] = Measured(round(value), len(items),
-                                         sum(1 for s in items if s.source == "vlastni"))
+            result[src][key] = Measured(round(value), len(items),
+                                        sum(1 for s in items if s.source == "vlastni"), base_ram, base_ssd)
     return result
 
 
 def reference_book(conn: sqlite3.Connection, market: MarketConfig, pricing: PricingConfig,
                    now: datetime) -> ReferenceBook:
     samples = sold_listing_samples(conn, market, now) + own_sale_samples(conn, market, now)
-    return ReferenceBook(manual=dict(pricing.reference), measured=build_measured(samples),
+    try:
+        models = load_models(conn)
+    except sqlite3.OperationalError:  # databáze před migrací 0004
+        models = {}
+    return ReferenceBook(manual=dict(pricing.reference),
+                         measured=build_measured(samples, models, market.ram_pct_per_doubling,
+                                                 market.ssd_pct_per_doubling),
                          mode=market.reference_mode, min_samples=market.min_samples,
-                         fallback_source=pricing.fallback_source)
+                         fallback_source=pricing.fallback_source, models=models,
+                         ram_pct=market.ram_pct_per_doubling, ssd_pct=market.ssd_pct_per_doubling)
 
 
 # přehledy pro dashboard

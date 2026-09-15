@@ -63,13 +63,16 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
         blocked = True
     effective_price = price_czk + travel_cost
 
-    found = (book or manual_book(cfg)).lookup(source, specs.family, specs.chip, specs.ssd_gb)
+    found = (book or manual_book(cfg)).lookup(source, specs.family, specs.chip, specs.ssd_gb, specs.ram_gb)
     if found is None:
         cheap = effective_price <= cfg.unknown_model_alert_below_czk
         return Assessment(Verdict.NEZNAMY_MODEL, should_alert=cheap and not blocked,
                           notes=tuple(notes), **base)
 
     reference, key, origin, samples = found
+    if not origin.startswith("config") and (specs.ram_gb is None or specs.ssd_gb is None):
+        missing = " a ".join(x for x, v in (("RAM", specs.ram_gb), ("SSD", specs.ssd_gb)) if v is None)
+        notes.append(f"{missing} neuvedeno, počítáno se základní konfigurací")
     penalty = battery_penalty(specs, cfg)
     if penalty:
         notes.append(f"srážka za baterii {penalty} Kč")

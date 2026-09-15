@@ -23,9 +23,13 @@ v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 2. U nových MacBooků z Bazoše se stáhne detail s plným textem a PSČ. Po jednom, s rozestupem 4 s.
 3. `privacy.py` nahradí telefony a e‑maily zástupkou. Jméno prodávajícího se nečte.
 4. `parsing.py` vytáhne rodinu, čip, RAM, SSD, rok, baterii, cykly, obchodníka a rizika se zápory.
-5. Reference: v režimu `auto` medián cen inzerátů, které zmizely do 14 dnů (po skupinách
-   zdroj + rodina + čip + SSD, s vlastními prodeji s vyšší váhou). Když vzorků není dost,
-   ruční tabulka. Pro Marketplace bez vlastních dat se použije Bazoš.
+5. Reference kusu = cena základní konfigurace modelu × přirážky za RAM a SSD
+   (výchozí +18 % za každé zdvojnásobení RAM, +11 % za SSD). Základ modelu se bere v tomto pořadí:
+   ručně uložený a zamčený řádek cenové tabulky, medián prodejů (inzeráty zmizelé do 14 dnů
+   a vlastní prodeje s trojnásobnou váhou, přepočtené na základní konfiguraci, aspoň 3 vzorky),
+   cenová tabulka odhadnutá z inzertních cen, starší ruční ceny s klíčem `zdroj|rodina|čip|ssd`.
+   Cenová tabulka se každých 7 dní přepočítá z inzertních cen, které nasbírá kontrola
+   životního cyklu (`--refit-prices` ručně). Zamčené řádky přepočet nepřepíše.
 6. Pingne se jen inzerát mladší než `alert_max_age_hours` (výchozí 3 h), počítáno od vložení
    nebo od posledního zlevnění. Starý výhodný kus zůstane v přehledu, ale nepřijde na Discord.
    V upozornění je napsané, kdy byl kus vložen nebo zlevněn.
