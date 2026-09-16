@@ -48,6 +48,8 @@ FIELDS: tuple[Field, ...] = (
     Field("sources.facebook.feed_url", "str", "Feed fb-mp-rss", "Zdroje"),
 
     Field("pricing.buy_ratio", "float", "Koupit pod (podíl reference)", "Posouzení", "Výchozí 0,65."),
+    Field("pricing.buy_min_profit_czk", "int", "Koupit při zisku aspoň (Kč)", "Posouzení",
+          "Zisk po odečtení cesty a srážek. Stačí splnit tohle, nebo podíl reference. 0 = vypnuto."),
     Field("pricing.watch_ratio", "float", "Sledovat pod (podíl reference)", "Posouzení", "Výchozí 0,80."),
     Field("pricing.battery_min_pct", "int", "Minimální zdraví baterie (%)", "Posouzení"),
     Field("pricing.cycles_max", "int", "Maximum cyklů baterie", "Posouzení"),

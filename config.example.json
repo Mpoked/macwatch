@@ -161,6 +161,7 @@
   },
   "pricing": {
     "buy_ratio": 0.65,
+    "buy_min_profit_czk": 0,
     "watch_ratio": 0.8,
     "battery_min_pct": 85,
     "cycles_max": 500,

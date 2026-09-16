@@ -91,6 +91,8 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
                           adjusted_reference_czk=adjusted, reference_samples=samples,
                           notes=(suspicious_note, *notes), **base)
     buy_limit = round(adjusted * cfg.buy_ratio)
+    if cfg.buy_min_profit_czk:
+        buy_limit = max(buy_limit, adjusted - cfg.buy_min_profit_czk)
     watch_limit = round(adjusted * cfg.watch_ratio)
     profit = adjusted - effective_price
     roi = profit / effective_price

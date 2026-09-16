@@ -38,7 +38,7 @@ v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 
 | Verdikt | Kdy (cena včetně cesty) | Ping |
 |---|---|---|
-| KOUPIT | ≤ reference × `buy_ratio` | ano |
+| KOUPIT | ≤ reference × `buy_ratio`, nebo zisk ≥ `buy_min_profit_czk` | ano |
 | KOUPIT_S_RIZIKEM | totéž, ale prasklina, iCloud, MDM, na díly | ano |
 | SLEDOVAT | ≤ reference × `watch_ratio` | ne |
 | NEVYPLATI_SE | dražší | ne |

@@ -105,6 +105,7 @@ class PricingConfig:
     alert_max_age_hours: float = 3.0      # starší inzerát (od vložení nebo zlevnění) se nepingne, 0 = bez limitu
     suspicious_below_ratio: float = 0.3   # cena pod tímto podílem reference je podezřelá
     suspicious_below_czk: int = 3000      # a pod touto cenou taky, i když reference chybí
+    buy_min_profit_czk: int = 0           # koupit i tehdy, když zisk po cestě dosáhne aspoň tolika Kč, 0 = vypnuto
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +197,7 @@ def parse_pricing(data: dict[str, Any]) -> PricingConfig:
         alert_max_age_hours=max(float(data.get("alert_max_age_hours", 3.0) or 0), 0.0),
         suspicious_below_ratio=float(data.get("suspicious_below_ratio", 0.3)),
         suspicious_below_czk=int(data.get("suspicious_below_czk", 3000)),
+        buy_min_profit_czk=max(int(data.get("buy_min_profit_czk", 0) or 0), 0),
         fallback_source=data.get("fallback_source"),
         reference={key.lower(): value for key, value in reference.items()},
     )

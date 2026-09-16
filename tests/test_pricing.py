@@ -51,6 +51,17 @@ class TestVerdict:
         assert a.est_profit_czk == 3400
         assert a.roi == pytest.approx(3400 / 5500, abs=1e-4)
 
+    def test_min_profit_buys_expensive_model(self, cfg):
+        pricing = dataclasses.replace(cfg.pricing, buy_min_profit_czk=3000)
+        a = assess("bazos", 5900, AIR_M1_256, pricing)  # 8900 - 3000, poměrem by to bylo 5785
+        assert a.verdict == Verdict.KOUPIT and a.should_alert
+        assert a.target_czk == 5900
+        assert assess("bazos", 5901, AIR_M1_256, pricing).verdict == Verdict.SLEDOVAT
+
+    def test_min_profit_does_not_tighten_ratio(self, cfg):
+        pricing = dataclasses.replace(cfg.pricing, buy_min_profit_czk=5000)
+        assert assess("bazos", 5785, AIR_M1_256, pricing).target_czk == 5785
+
     def test_watch_does_not_alert(self, cfg):
         a = assess("bazos", 7000, AIR_M1_256, cfg.pricing)  # limit 0.80 * 8900 = 7120
         assert a.verdict == Verdict.SLEDOVAT
