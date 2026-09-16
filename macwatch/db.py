@@ -123,6 +123,8 @@ class Database:
         conn = sqlite3.connect(str(path))
         if not in_memory:
             conn.execute("PRAGMA journal_mode = WAL")
+            # ve WAL stačí: nečeká na disk po každém commitu, databáze se při výpadku proudu nepoškodí
+            conn.execute("PRAGMA synchronous = NORMAL")
         db = cls(conn)
         migrate(conn, bundled_migrations(), db_path=None if in_memory else Path(path), now=now)
         return db
