@@ -62,12 +62,16 @@ zmizení nepozná, statistiky prodejů jsou zatím jen z Bazoše.
 Potřebuješ Python 3.13 nebo novější. Za běhu žádné další balíčky.
 
 ```
-git clone <repo> ~/Projects/macwatch
+git clone https://github.com/Mpoked/macwatch.git ~/Projects/macwatch
 cd ~/Projects/macwatch
 cp config.example.json config.json
 python3 -m macwatch --migrate
 python3 -m macwatch --dry-run          # zkušební průchod, nic neuloží ani neodešle
 ```
+
+Sběr z Facebooku je v repozitáři taky, v podadresáři `fb-mp-rss/`, nic dalšího se neklonuje.
+Rozjede se jedním `docker compose` (viz Facebook Marketplace níže). Bez Dockeru běží Bazoš sám
+o sobě, jen v `config.json` nech `sources.facebook.enabled` na `false`.
 
 Všechno ostatní se nastavuje v dashboardu (sekce Nastavení a Ceny): Discord webhook,
 feedy, poměry pro verdikt, domovské PSČ, max. vzdálenost nebo celá ČR, spotřeba,
@@ -132,18 +136,20 @@ X-Forwarded-Host). Když by za tunelem ukládání vracelo 403, nastav u pravidl
 
 ## Facebook Marketplace
 
-Facebook se čte bez přihlášení přes fork `regek/facebook-marketplace-rss` v `~/Projects/fb-mp-rss`
-(větev `macwatch`, změny v `PATCHES.md`). Běží v Dockeru a feed vystavuje jen na `127.0.0.1:5000`.
+Facebook se čte bez přihlášení přes upravený fork `regek/facebook-marketplace-rss`. Ten je
+součástí tohohle repozitáře v podadresáři `fb-mp-rss/` (změny proti originálu popisuje
+`fb-mp-rss/PATCHES.md`). Běží v Dockeru a feed vystavuje jen na `127.0.0.1:5000`.
 
 ```
-git clone -b macwatch <fork> ~/Projects/fb-mp-rss
-cd ~/Projects/fb-mp-rss
+cd ~/Projects/macwatch/fb-mp-rss
 mkdir -p data && chmod 777 data          # kontejner zapisuje jako uživatel appuser
 cp config.sample.json data/config.json   # a uprav podle níže
 docker compose up -d --build
 docker logs -f fb-mp-rss                 # "N ads on page, M new"
 curl -s http://127.0.0.1:5000/rss | head
 ```
+
+Adresář `fb-mp-rss/data/` je mimo git, drží běhový config, databázi feedu a log.
 
 V `data/config.json` je pod `url_filters` adresa hledání. Na Facebooku nastav lokalitu, okruh
 a hledání „macbook“, zkopíruj adresu a přidej `sortBy=creation_time_descend`
@@ -154,7 +160,7 @@ ukáže jen první várku kolem 24 inzerátů, proto na řazení záleží. Filt
 Adresy hledání, klíčová slova, interval, stáří inzerátů a řazení se dají měnit v dashboardu
 (Nastavení, sekce Facebook Marketplace). Dashboard zapíše `data/config.json` a fb-mp-rss ho
 načte před další kontrolou bez restartu. Cestu k souboru určuje `sources.facebook.config_path`
-v `config.json` macwatch.
+v `config.json` macwatch, výchozí `fb-mp-rss/data/config.json` sedí na uložení v repozitáři.
 
 fb-mp-rss čte data z JSONu, který Facebook vkládá do stránky. Ve feedu je proto skutečný čas
 vložení, číselná cena, původní cena u zlevněných kusů a stav prodáno nebo rezervováno.
@@ -205,5 +211,5 @@ v sekci `parsing`. Kód obsahuje jen obecné extraktory (cena, kapacity, procent
 | Python standardní knihovna | PSF | běh |
 | pytest | MIT | jen testy |
 | GeoNames postal codes CZ | CC BY 4.0 | PSČ a souřadnice, `macwatch/data/cz_postal.tsv` |
-| facebook-marketplace-rss (fork) | BSD-3-Clause | sběr z Marketplace, Docker |
+| facebook-marketplace-rss (fork) | BSD-3-Clause | sběr z Marketplace, Docker, `fb-mp-rss/` |
 | Firefox, geckodriver, Selenium | MPL-2.0, MPL-2.0, Apache-2.0 | uvnitř kontejneru fb-mp-rss |

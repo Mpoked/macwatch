@@ -24,7 +24,7 @@
     "facebook": {
       "enabled": true,
       "feed_url": "http://127.0.0.1:5000/rss",
-      "config_path": "../fb-mp-rss/data/config.json"
+      "config_path": "fb-mp-rss/data/config.json"
     }
   },
   "parsing": {

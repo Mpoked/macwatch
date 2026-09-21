@@ -944,7 +944,7 @@ def facebook_panel(ctx: Ctx, cfg: AppConfig, submitted: fbconfig.FbSettings | No
     head = '<div class=panel id=facebook><h2 style="margin-top:0">Facebook Marketplace</h2>'
     if path is None:
         return (head + '<p class=muted>Cesta ke configu fb-mp-rss není nastavená. Doplň do config.json '
-                '<code>sources.facebook.config_path</code>, třeba <code>../fb-mp-rss/data/config.json</code>.</p></div>')
+                '<code>sources.facebook.config_path</code>, třeba <code>fb-mp-rss/data/config.json</code>.</p></div>')
     try:
         _, current = fbconfig.load(path)
     except fbconfig.FbConfigError as exc:
