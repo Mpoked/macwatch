@@ -6,6 +6,16 @@ proti referenčním cenám, výhodné kusy pošle na Discord a vede sklad a ekon
 Zdroje: Bazoš (RSS, detail a stránka hledání) a Facebook Marketplace (přes upravený fb-mp-rss
 v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 
+## Spuštění
+
+```
+python3 -m macwatch --all
+```
+
+Jeden příkaz rozjede všechno: migrace databáze, kontejner fb-mp-rss (když je Facebook zapnutý),
+dashboard na <http://127.0.0.1:8080> a sběr v popředí. Ctrl+C dokončí rozběhnutý průchod a skončí.
+Napoprvé viz [Setup od nuly](#setup-od-nuly), na trvalý běh [Běh jako služba](#běh-jako-služba).
+
 ## Co to umí
 
 | Fáze | Co | Kde |
@@ -65,13 +75,17 @@ Potřebuješ Python 3.13 nebo novější. Za běhu žádné další balíčky.
 git clone https://github.com/Mpoked/macwatch.git ~/Projects/macwatch
 cd ~/Projects/macwatch
 cp config.example.json config.json
-python3 -m macwatch --migrate
 python3 -m macwatch --dry-run          # zkušební průchod, nic neuloží ani neodešle
+python3 -m macwatch --all              # všechno: fb-mp-rss v Dockeru, dashboard, sběr
 ```
 
-Sběr z Facebooku je v repozitáři taky, v podadresáři `fb-mp-rss/`, nic dalšího se neklonuje.
-Rozjede se jedním `docker compose` (viz Facebook Marketplace níže). Bez Dockeru běží Bazoš sám
-o sobě, jen v `config.json` nech `sources.facebook.enabled` na `false`.
+`--all` rozjede kontejner fb-mp-rss (když je Facebook zapnutý), dashboard na
+`127.0.0.1:8080` (`--host`, `--port`) a v popředí sběr. Migrace i první `data/config.json`
+pro fb-mp-rss si udělá sám. Bez Dockeru jede Bazoš dál, jen se zaloguje varování.
+
+Sběr z Facebooku je v repozitáři taky, v podadresáři `fb-mp-rss/`, nic dalšího se neklonuje
+(podrobnosti v sekci Facebook Marketplace). Bez Dockeru běží Bazoš sám o sobě, jen v
+`config.json` nech `sources.facebook.enabled` na `false`.
 
 Všechno ostatní se nastavuje v dashboardu (sekce Nastavení a Ceny): Discord webhook,
 feedy, poměry pro verdikt, domovské PSČ, max. vzdálenost nebo celá ČR, spotřeba,
@@ -80,20 +94,23 @@ a přebíjí `config.json`, služba ho načte při dalším průchodu bez restar
 V `config.json` zůstávají jen cesta k databázi, HTTP a regulární výrazy parseru.
 
 Další příkazy: `--once` jeden ostrý průchod, `--lifecycle` hned kontrola životního cyklu,
-`--web` dashboard, `-v` podrobné logy.
+`--web` jen dashboard, `--migrate` jen migrace, `-v` podrobné logy.
 
 ## Běh jako služba
 
+Jeden unit, uvnitř `--all`, takže sběr, dashboard i kontejner fb-mp-rss.
+
 ```
 systemctl --user link ~/Projects/macwatch/deploy/macwatch.service
-systemctl --user link ~/Projects/macwatch/deploy/macwatch-web.service
-systemctl --user enable --now macwatch.service macwatch-web.service
+systemctl --user enable --now macwatch.service
 sudo loginctl enable-linger $USER          # běh bez přihlášení a po restartu
-journalctl --user -u macwatch -f           # logy sběru
+journalctl --user -u macwatch -f           # logy sběru i dashboardu
 journalctl --user -u macwatch -p warning   # jen varování a chyby
 ```
 
-Unity počítají s projektem v `~/Projects/macwatch`. Dashboard poslouchá na `127.0.0.1:8080`.
+Unit počítá s projektem v `~/Projects/macwatch`. Dashboard poslouchá na `127.0.0.1:8080`.
+Kdo má z dřívějška zvlášť `macwatch-web.service`, zruší ho:
+`systemctl --user disable --now macwatch-web.service`.
 
 ### Dashboard z místní sítě
 
@@ -101,9 +118,9 @@ Výchozí unit poslouchá jen na 127.0.0.1. Pro přístup z jiného počítače 
 (bez přihlášení, vidí ho každý v síti) přidej drop-in:
 
 ```
-mkdir -p ~/.config/systemd/user/macwatch-web.service.d
-cp deploy/macwatch-web-lan.conf ~/.config/systemd/user/macwatch-web.service.d/lan.conf
-systemctl --user daemon-reload && systemctl --user restart macwatch-web
+mkdir -p ~/.config/systemd/user/macwatch.service.d
+cp deploy/macwatch-lan.conf ~/.config/systemd/user/macwatch.service.d/lan.conf
+systemctl --user daemon-reload && systemctl --user restart macwatch
 ```
 
 Server musí mít synchronizovaný čas (`timedatectl` ukáže `System clock synchronized: yes`),

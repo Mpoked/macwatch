@@ -67,3 +67,30 @@ def test_terminal_format_without_journal(monkeypatch, capsys):
     logging_setup.configure()
     logging.getLogger("macwatch.test").info("ahoj")
     assert "INFO    macwatch.test: ahoj" in capsys.readouterr().err
+
+
+def test_all_starts_facebook_dashboard_and_service(monkeypatch, tmp_path, config_data):
+    project = tmp_path / "fb-mp-rss"
+    project.mkdir()
+    (project / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (project / "config.sample.json").write_text("{}", encoding="utf-8")
+    config_data["sources"]["facebook"] = {
+        "enabled": True, "config_path": str(project / "data" / "config.json")}
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config_data), encoding="utf-8")
+
+    ran = {}
+    monkeypatch.setattr(cli.subprocess, "run",
+                        lambda cmd, **kw: ran.setdefault("docker", (cmd, kw["cwd"])))
+    monkeypatch.setattr("macwatch.web.server.serve", lambda *a: ran.update(web=a[2:]) or 0)
+    monkeypatch.setattr(cli, "run_service", lambda *a, **kw: ran.update(service=kw) or 0)
+
+    assert cli.main(["--config", str(config_path), "--all", "--port", "9999"]) == 0
+    assert ran["docker"] == (["docker", "compose", "up", "-d"], project)
+    assert (project / "data" / "config.json").exists(), "chybějící config se zkopíruje ze sample"
+    assert ran["service"] == {"once": False, "details": None}
+    for _ in range(100):  # vlákno dashboardu naběhne po startu služby
+        if "web" in ran:
+            break
+        __import__("time").sleep(0.01)
+    assert ran["web"] == ("127.0.0.1", 9999)

@@ -1,15 +1,15 @@
-# Uživatelská služba systemd.
+# Uživatelská služba systemd: sběr, dashboard a kontejner fb-mp-rss v jednom.
 # Instalace: viz README, sekce "Běh jako služba".
 
 [Unit]
 Description=macwatch, hlídač bazarů s MacBooky
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target docker.service
+After=network-online.target docker.service
 
 [Service]
 Type=simple
 WorkingDirectory=%h/Projects/macwatch
-ExecStart=/usr/bin/python3 -m macwatch --config %h/Projects/macwatch/config.json
+ExecStart=/usr/bin/python3 -m macwatch --all --host 127.0.0.1 --port 8080 --config %h/Projects/macwatch/config.json
 Restart=on-failure
 RestartSec=60
 # při zastavení počká na dokončení rozběhnutého průchodu

@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import logging
 import random
+import shutil
 import signal
+import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
@@ -52,6 +54,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     mode.add_argument("--once", action="store_true", help="jeden ostrý průchod a konec")
     mode.add_argument("--migrate", action="store_true", help="jen aplikovat migrace databáze")
     mode.add_argument("--web", action="store_true", help="spustit webový dashboard")
+    mode.add_argument("--all", action="store_true",
+                      help="všechno jedním příkazem: fb-mp-rss v Dockeru, dashboard a sběr")
     mode.add_argument("--lifecycle", action="store_true",
                       help="hned spustit kontrolu životního cyklu na Bazoši a skončit")
     mode.add_argument("--refit-prices", action="store_true",
@@ -170,6 +174,29 @@ class Service:
                 self.pipeline.reassess_active({s.name for s in sources if s.supports_enrich})
 
 
+def start_facebook(cfg: AppConfig) -> None:
+    """Rozjede fb-mp-rss v Dockeru. Kontejner má restart=unless-stopped, takže `up -d` stačí."""
+    if not cfg.facebook.enabled or cfg.facebook.config_path is None:
+        return
+    project = cfg.facebook.config_path.resolve().parent.parent  # fb-mp-rss/data/config.json
+    if not (project / "docker-compose.yml").exists():
+        log.warning("fb-mp-rss není v %s, Facebook feed si spusť sám", project)
+        return
+    data = cfg.facebook.config_path.parent
+    data.mkdir(parents=True, exist_ok=True)
+    data.chmod(0o777)  # kontejner zapisuje jako appuser
+    if not cfg.facebook.config_path.exists():
+        shutil.copy(project / "config.sample.json", cfg.facebook.config_path)
+    try:
+        subprocess.run(["docker", "compose", "up", "-d"], cwd=project, check=True,
+                       capture_output=True, text=True, timeout=1800)
+    except (OSError, subprocess.SubprocessError) as exc:
+        out = getattr(exc, "stderr", "") or ""
+        log.warning("fb-mp-rss se nerozjel (%s %s), Bazoš jede dál", exc, out.strip()[-300:])
+    else:
+        log.info("fb-mp-rss běží, feed %s", cfg.facebook.feed_url)
+
+
 def run_service(config_path: Path, *, once: bool, details: int | None) -> int:
     base = load_config(config_path)
     db = Database.open(base.database)
@@ -227,6 +254,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.web:
         from macwatch.web.server import serve
         return serve(args.config, cfg, args.host, args.port)
+    if args.all:
+        from macwatch.web.server import serve
+        start_facebook(cfg)
+        threading.Thread(target=serve, args=(args.config, cfg, args.host, args.port),
+                         daemon=True).start()
+        return run_service(args.config, once=False, details=args.details)
     if args.refit_prices:
         db = Database.open(cfg.database)
         try:
