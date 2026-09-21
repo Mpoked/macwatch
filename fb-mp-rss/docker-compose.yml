@@ -1,0 +1,16 @@
+# docker compose up -d --build
+services:
+  fb-mp-rss:
+    build: .
+    image: fb-mp-rss:macwatch
+    container_name: fb-mp-rss
+    restart: unless-stopped
+    environment:
+      CONFIG_FILE: /app/config/config.json
+      DB_FILE: /app/config/fb-rss-feed.db
+    ports:
+      # jen z tohoto stroje, feed nemá být vidět v síti
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./data:/app/config
+    shm_size: 512m
