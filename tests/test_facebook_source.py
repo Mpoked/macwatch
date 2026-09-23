@@ -7,7 +7,7 @@ from macwatch.db import Database
 from macwatch.models import Verdict
 from macwatch.parsing import parse_price_czk, parse_specs
 from macwatch.pipeline import Pipeline
-from macwatch.sources.facebook import FacebookSource, parse_description, parse_feed
+from macwatch.sources.facebook import FacebookSource, parse_description, parse_feed, parse_session
 from macwatch.sources.http import FetchError, Response
 from tests.conftest import read_fixture
 
@@ -160,3 +160,50 @@ def test_pipeline_sold_goes_to_market_data_and_reserved_is_not_alerted(cfg):
     assert all("Rose Gold" not in e["title"] for e in sent)
     pipeline.reassess_active(set())
     assert db.get_listing(reserved.item.key)["alerted_at"] is None, "rezervovaný se nepingne ani při přepočtu"
+
+
+def feed_with_session(state):
+    return ('<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>'
+            f'<description>Facebook Marketplace ads, session: {state}</description></channel></rss>')
+
+
+def test_session_state_from_channel():
+    assert parse_session(feed_with_session("expired")) == "expired"
+    assert parse_session(read_fixture("facebook", "rss_feed.xml")) is None  # starší scraper
+
+
+class RecordingNotifier:
+    def __init__(self, ok=True):
+        self.sent = []
+        self.ok = ok
+
+    def send(self, embed):
+        self.sent.append(embed)
+        return self.ok
+
+
+def test_expired_login_is_reported_once_and_again_after_recovery(cfg):
+    client = FakeClient(Response(FEED_URL, 200, feed_with_session("expired")))
+    source = FacebookSource(FacebookConfig(True, FEED_URL), client, clock=lambda: NOW)
+    notifier = RecordingNotifier()
+    pipeline = Pipeline(cfg, Database.open(":memory:"), notifier, clock=lambda: NOW)
+    pipeline.run_source(source)
+    pipeline.run_source(source)
+    assert len(notifier.sent) == 1
+    assert "cookies" in notifier.sent[0]["description"]
+    client.response = Response(FEED_URL, 200, feed_with_session("ok"))
+    pipeline.run_source(source)
+    client.response = Response(FEED_URL, 200, feed_with_session("expired"))
+    pipeline.run_source(source)
+    assert len(notifier.sent) == 2
+
+
+def test_failed_login_notice_is_retried(cfg):
+    source = FacebookSource(FacebookConfig(True, FEED_URL), FakeClient(
+        Response(FEED_URL, 200, feed_with_session("expired"))), clock=lambda: NOW)
+    notifier = RecordingNotifier(ok=False)
+    pipeline = Pipeline(cfg, Database.open(":memory:"), notifier, clock=lambda: NOW)
+    pipeline.run_source(source)
+    notifier.ok = True
+    pipeline.run_source(source)
+    assert len(notifier.sent) == 2

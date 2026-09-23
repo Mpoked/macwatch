@@ -23,6 +23,7 @@ SOURCE = "facebook"
 
 _ITEM_ID = re.compile(r"/marketplace/item/(\d+)")
 _COUNTRY_SUFFIX = re.compile(r",\s*(?:Czech Republic|Česko|Czechia)\s*$", re.I)
+_SESSION = re.compile(r"session:\s*(\w+)")
 
 
 def parse_description(text: str) -> dict[str, str]:
@@ -33,6 +34,13 @@ def parse_description(text: str) -> dict[str, str]:
         if sep:
             fields[key.strip().lower()] = value.strip()
     return fields
+
+
+def parse_session(xml_text: str) -> str | None:
+    """Stav přihlášení scraperu z popisu kanálu: anonymous, ok, expired. Starší scraper nic nevrací."""
+    description = ET.fromstring(xml_text).findtext("channel/description") or ""
+    match = _SESSION.search(description)
+    return match.group(1) if match else None
 
 
 def parse_feed(xml_text: str, fetched_at: datetime) -> list[RawListing]:
@@ -76,6 +84,15 @@ class FacebookSource:
         self.cfg = cfg
         self.client = client
         self._now = clock
+        self.session: str | None = None
+
+    def health_notice(self) -> str | None:
+        """Problém, o kterém má vědět uživatel. Pipeline ho pošle na Discord jednou."""
+        if self.session == "expired":
+            return ("Přihlášení do Facebooku vypršelo, Marketplace se stahuje bez účtu a ukazuje "
+                    "jen část inzerátů. Vyexportuj z prohlížeče nové cookies do "
+                    "~/Projects/fb-mp-rss/data/cookies.json.")
+        return None
 
     def poll(self) -> Iterator[RawListing]:
         try:
@@ -85,6 +102,7 @@ class FacebookSource:
         if response.status != 200:
             raise FetchError(f"fb-mp-rss vrátil HTTP {response.status}")
         items = parse_feed(response.text, self._now())
+        self.session = parse_session(response.text)
         log.debug("facebook feed: %d položek", len(items))
         yield from items
 

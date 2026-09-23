@@ -16,7 +16,7 @@ from macwatch.db import Database
 from macwatch.geo import Gazetteer, Place, estimate_travel
 from macwatch.market import ReferenceBook, reference_book
 from macwatch.models import Assessment, RawListing, Specs
-from macwatch.notify import build_embed
+from macwatch.notify import SOURCE_NAMES, build_embed
 from macwatch.parsing import normalize, parse_price_czk, parse_specs, passes_prefilter
 from macwatch.pricing import assess
 from macwatch.sources.base import ListingGone, Source
@@ -78,6 +78,7 @@ class Pipeline:
         self.gazetteer = gazetteer
         self.book: ReferenceBook | None = None
         self.home: Place | None = None
+        self._notices: dict[str, str | None] = {}  # poslední ohlášený problém zdroje
         self.refresh()
 
     def refresh(self, cfg: AppConfig | None = None) -> None:
@@ -122,6 +123,7 @@ class Pipeline:
                     continue
                 if finding:
                     findings.append(finding)
+            self._report_health(source)
         except Exception as exc:
             log.exception("zdroj %s selhal", source.name)
             stats.errors.append(f"{source.name}: {exc}")
@@ -265,6 +267,22 @@ class Pipeline:
                 stats.errors.append(f"{row['url']}: {exc}")
         log.debug("přepočteno %d aktivních inzerátů, %d upozornění", len(rows), stats.alerts_sent)
         return stats
+
+    def _report_health(self, source: Source) -> None:
+        """Problém zdroje (třeba vypršelé přihlášení) pošle na Discord jednou, znovu až po nápravě."""
+        check = getattr(source, "health_notice", None)
+        notice = check() if check else None
+        if notice == self._notices.get(source.name):
+            return
+        if notice is None:
+            log.info("%s: problém se zdrojem pominul", source.name)
+        else:
+            log.warning("%s: %s", source.name, notice)
+            embed = {"title": f"{SOURCE_NAMES.get(source.name, source.name)}: potřebuje zásah",
+                     "description": notice, "color": 0xE67E22}
+            if self.notifier is not None and not self.notifier.send(embed):
+                return  # zkusí se znovu při dalším průchodu
+        self._notices[source.name] = notice
 
     def _alert(self, finding: Finding, stats: RunStats) -> bool:
         if self.notifier is None:
