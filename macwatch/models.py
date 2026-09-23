@@ -73,6 +73,7 @@ class Verdict:
     NEZNAMY_MODEL = "NEZNAMY_MODEL"
     BEZ_CENY = "BEZ_CENY"
     PODEZRELE = "PODEZRELE"   # podezřele nízká cena: příslušenství, díl nebo podvod
+    OVERIT = "OVERIT"         # titulek bez čipu a bez popisu (Facebook), může to být M1 i Intel
     MIMO = "MIMO"
 
 

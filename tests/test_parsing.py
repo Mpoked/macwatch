@@ -83,6 +83,24 @@ class TestSpecsFromText:
         assert not s.eligible
         assert s.reason == "procesor Intel"
 
+    def test_model_number_gives_family_and_chip(self, rules):
+        s = parse_specs("Apple Macbook air 13 silver A2681", "", rules)
+        assert (s.family, s.chip, s.eligible) == ("air", "m2", True)
+        s = parse_specs("MacBook 14 A2442 16/512", "", rules)
+        assert (s.family, s.chip, s.eligible) == ("pro", "m1 pro", True)
+
+    def test_ambiguous_model_number_is_eligible_without_chip(self, rules):
+        s = parse_specs("MacBook Pro 13 A2338", "", rules)
+        assert (s.family, s.chip, s.eligible) == ("pro", None, True)
+
+    def test_chip_in_title_beats_model_number(self, rules):
+        assert parse_specs("MacBook Pro 13 M2 A2338", "", rules).chip == "m2"
+
+    def test_intel_model_number_is_out_of_scope(self, rules):
+        s = parse_specs("Macbook pro 2020 a2289", "", rules)
+        assert not s.eligible and s.reason == "procesor Intel"
+        assert not parse_specs("Prodej macbooku Apple A1466", "", rules).eligible
+
     def test_year_without_chip_is_eligible(self, rules):
         s = parse_specs("MacBook Air 2022 8/256", "", rules)
         assert s.eligible and s.chip is None

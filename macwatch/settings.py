@@ -84,6 +84,9 @@ FIELDS: tuple[Field, ...] = (
     Field("travel.unlimited", "bool", "Celá ČR bez omezení", "Dojezd"),
     Field("travel.max_km", "float", "Maximální vzdálenost (km)", "Dojezd",
           "Dál se nepinguje, v přehledu zůstává."),
+    Field("pricing.far_alert_min_profit_czk", "int", "Za hranicí pingnout při zisku aspoň (Kč)", "Dojezd",
+          "Kus dál než maximální vzdálenost se pingne, když zisk po odečtení cesty dosáhne této hranice. "
+          "0 = vypnuto."),
     Field("travel.consumption_l_per_100km", "float", "Spotřeba (l/100 km)", "Dojezd"),
     Field("travel.fuel_price_czk_per_l", "float", "Cena paliva (Kč/l)", "Dojezd"),
     Field("travel.extra_czk_per_km", "float", "Další náklady (Kč/km)", "Dojezd",

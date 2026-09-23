@@ -24,6 +24,7 @@ VERDICT_LABELS = {
     "NEVYPLATI_SE": ("Nevyplatí se", "muted"),
     "BEZ_CENY": ("Bez ceny", "muted"),
     "PODEZRELE": ("Podezřele levné", "bad"),
+    "OVERIT": ("Ověřit model", "info"),
     "MIMO": ("Mimo rozsah", "muted"),
 }
 

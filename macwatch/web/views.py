@@ -45,7 +45,7 @@ from macwatch.web.html import (
 )
 from macwatch.web.server import Request, Response, html_response, redirect
 
-INTERESTING = ("KOUPIT", "KOUPIT_S_RIZIKEM", "NEZNAMY_MODEL", "SLEDOVAT")
+INTERESTING = ("KOUPIT", "KOUPIT_S_RIZIKEM", "NEZNAMY_MODEL", "SLEDOVAT", "OVERIT")
 SSD_OPTIONS = [("", "?"), ("128", "128 GB"), ("256", "256 GB"), ("512", "512 GB"), ("1024", "1 TB"),
                ("2048", "2 TB"), ("4096", "4 TB"), ("8192", "8 TB")]
 FAMILY_OPTIONS = [("", "?"), ("air", "Air"), ("pro", "Pro")]
@@ -212,7 +212,7 @@ def findings(ctx: Ctx) -> Response:
     source = req.arg("source")
     max_km = req.arg("km")
     text = req.arg("q").strip()
-    where = ["l.gone_at IS NULL", "a.eligible = 1"]
+    where = ["l.gone_at IS NULL", "(a.eligible = 1 OR a.verdict = 'OVERIT')"]
     params: list[Any] = []
     if show == "vyhodne":
         where.append(f"a.verdict IN ({','.join('?' for _ in INTERESTING)})")

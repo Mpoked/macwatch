@@ -1,3 +1,4 @@
+import dataclasses
 from datetime import datetime, timezone
 
 import pytest
@@ -207,3 +208,14 @@ def test_failed_login_notice_is_retried(cfg):
     notifier.ok = True
     pipeline.run_source(source)
     assert len(notifier.sent) == 2
+
+
+def test_title_without_chip_needs_check(cfg):
+    pipeline = Pipeline(cfg, Database.open(":memory:"), None, clock=lambda: NOW)
+    item = parse_feed(read_fixture("facebook", "rss_feed.xml"), NOW)[0]
+    for title, verdict in (("Macbook Air 13” Rose Gold", Verdict.OVERIT), ("MacBook Pro 13” 2017", Verdict.MIMO),
+                           ("Macbook pro 2020 a2289", Verdict.MIMO)):
+        _, assessment = pipeline.evaluate(dataclasses.replace(item, title=title, body=""), 9000)
+        assert assessment.verdict == verdict, title
+    _, accessory = pipeline.evaluate(dataclasses.replace(item, title="Redukce pro Macbook", body=""), 800)
+    assert accessory.verdict == Verdict.MIMO

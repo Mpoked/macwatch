@@ -259,6 +259,45 @@ def passes_prefilter(title: str, rules: ParsingRules) -> bool:
     return any(p.search(text) for p in rules.prefilter)
 
 
+# modelová čísla Apple (A2337 na spodku notebooku), inzeráty z Facebooku mají často jen titulek
+
+# rodina, čip; u Pro/Max varianty se bere slabší čip, ať reference nevychází přehnaně
+MODEL_NUMBERS: dict[str, tuple[str, str | None]] = {
+    "a2337": ("air", "m1"),
+    "a2338": ("pro", None),          # Pro 13" s M1 i M2, stejné číslo
+    "a2442": ("pro", "m1 pro"),
+    "a2485": ("pro", "m1 pro"),
+    "a2681": ("air", "m2"),
+    "a2941": ("air", "m2"),
+    "a2779": ("pro", "m2 pro"),
+    "a2780": ("pro", "m2 pro"),
+    "a2918": ("pro", "m3"),
+    "a2992": ("pro", "m3 pro"),
+    "a2991": ("pro", "m3 pro"),
+    "a3113": ("air", "m3"),
+    "a3114": ("air", "m3"),
+    "a3240": ("air", "m4"),
+    "a3241": ("air", "m4"),
+    "a3112": ("pro", "m4"),
+}
+INTEL_MODEL_NUMBERS = frozenset({
+    "a1278", "a1286", "a1369", "a1370", "a1398", "a1425", "a1465", "a1466", "a1502", "a1534",
+    "a1706", "a1707", "a1708", "a1932", "a1989", "a1990", "a2141", "a2159", "a2179", "a2251", "a2289",
+})
+_MODEL_NUMBER = re.compile(r"\b(a\d{4})\b")
+
+
+def extract_model_number(text: str) -> tuple[str, tuple[str, str | None] | None] | None:
+    """Vrátí (číslo, (rodina, čip)) pro Apple Silicon, (číslo, None) pro Intel, jinak None."""
+    for match in _MODEL_NUMBER.finditer(text):
+        number = match.group(1)
+        if number in MODEL_NUMBERS:
+            return number, MODEL_NUMBERS[number]
+        if number in INTEL_MODEL_NUMBERS:
+            return number, None
+    return None
+
+
 # celek
 
 def _title_then_body(fn, title: str, body: str, *args):
@@ -295,6 +334,16 @@ def parse_specs(title: str, body: str | None, rules: ParsingRules) -> Specs:
         chip, variant = f"m{generation}", None
     year = _title_then_body(extract_year, t, b)
     non_apple = _first(rules.non_apple_cpu, t) or (chip is None and _first(rules.non_apple_cpu, b))
+    model = extract_model_number(t) or (extract_model_number(b) if chip is None else None)
+    by_number = False
+    if chip is None and model is not None:
+        if model[1] is None:
+            non_apple = True
+        else:
+            family = family or model[1][0]
+            chip, by_number = model[1][1], True
+            if chip is not None:
+                generation, variant = int(chip[1]), (chip.split()[1] if " " in chip else None)
 
     if not any(p.search(both) for p in rules.prefilter):
         eligible, reason = False, "není to hlídaný produkt"
@@ -304,9 +353,11 @@ def parse_specs(title: str, body: str | None, rules: ParsingRules) -> Specs:
         if generation < rules.min_chip_generation:
             eligible, reason = False, "starý čip"
         else:
-            eligible, reason = True, None
+            eligible, reason = True, (f"čip podle modelového čísla {model[0].upper()}" if by_number else None)
     elif non_apple:
         eligible, reason = False, "procesor Intel"
+    elif by_number:
+        eligible, reason = True, "Apple Silicon podle modelového čísla, M1 nebo M2"
     elif year is not None and year >= rules.min_year_without_chip:
         eligible, reason = True, "čip neuveden, odvozeno z roku"
     else:

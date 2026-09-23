@@ -15,7 +15,7 @@ from macwatch.models import Assessment, RawListing, Specs
 
 log = logging.getLogger(__name__)
 
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 
 _MIGRATION_NAME = re.compile(r"^(\d{4})_[\w-]+\.sql$")
 

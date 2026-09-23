@@ -15,7 +15,7 @@ from macwatch.config import AppConfig
 from macwatch.db import Database
 from macwatch.geo import Gazetteer, Place, estimate_travel
 from macwatch.market import ReferenceBook, reference_book
-from macwatch.models import Assessment, RawListing, Specs
+from macwatch.models import Assessment, RawListing, Specs, Verdict
 from macwatch.notify import SOURCE_NAMES, build_embed
 from macwatch.parsing import normalize, parse_price_czk, parse_specs, passes_prefilter
 from macwatch.pricing import assess
@@ -66,6 +66,16 @@ def row_to_item(row: sqlite3.Row) -> RawListing:
         reserved=row["status"] == "reserved")
 
 
+def needs_check(item: RawListing, price: int | None, specs: Specs, assessment: Assessment, min_price: int) -> bool:
+    """MacBook bez čipu v titulku a bez popisu: nevíme, jestli je to M1, nebo Intel. Ať se na něj člověk podívá.
+
+    Levnější kus je skoro jistě příslušenství nebo díl.
+    """
+    return (assessment.verdict == Verdict.MIMO and specs.reason == "čip neuveden" and specs.family is not None
+            and not item.body and (specs.year is None or specs.year >= 2020)
+            and price is not None and price >= min_price)
+
+
 class Pipeline:
     def __init__(self, cfg: AppConfig, db: Database, notifier: Notifier | None, *,
                  clock: Callable[[], datetime] = _utcnow, max_details: int | None = None,
@@ -99,7 +109,11 @@ class Pipeline:
         if self.home and self.gazetteer:
             place = self.gazetteer.locate(item.postal_code, item.locality)
             travel = estimate_travel(self.cfg.travel, self.home, place)
-        return specs, assess(item.source, price, specs, self.cfg.pricing, self.book, travel)
+        assessment = assess(item.source, price, specs, self.cfg.pricing, self.book, travel)
+        if needs_check(item, price, specs, assessment, self.cfg.pricing.suspicious_below_czk):
+            assessment = dataclasses.replace(
+                assessment, verdict=Verdict.OVERIT, notes=("čip neuveden, inzerát má jen titulek",))
+        return specs, assessment
 
     def run_source(self, source: Source) -> tuple[list[Finding], RunStats]:
         stats = RunStats()
@@ -185,7 +199,11 @@ class Pipeline:
         if item.sold:
             # prodaný kus je nejlepší tržní vzorek: zmizel s touto cenou
             self.db.mark_gone(item.key, now, "prodáno")
-        return self._assess_and_alert(item, price, source.supports_enrich, alerted, stats, now)
+        finding = self._assess_and_alert(item, price, source.supports_enrich, alerted, stats, now)
+        verdict, blocked = finding.assessment.verdict, not finding.assessment.should_alert
+        if row is None and blocked and verdict in (Verdict.KOUPIT, Verdict.KOUPIT_S_RIZIKEM):
+            log.info("výhodný, ale nepingám (%s): %s", ", ".join(finding.assessment.notes), item.url)
+        return finding
 
     def _assess_and_alert(self, item: RawListing, price: int | None, supports_enrich: bool,
                           alerted: bool, stats: RunStats, now: datetime) -> Finding:

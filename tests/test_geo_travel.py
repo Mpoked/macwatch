@@ -90,3 +90,11 @@ class TestTravelInAssessment:
         assert a.verdict == Verdict.KOUPIT
         assert not a.should_alert
         assert any("mimo dojezd" in n for n in a.notes)
+
+    def test_beyond_max_km_is_alerted_when_profit_is_high_enough(self, cfg, gaz):
+        far = self.travel(gaz, 100, within=False)
+        rich = dataclasses.replace(cfg.pricing, far_alert_min_profit_czk=4000)
+        a = assess("bazos", 3000, AIR_M1_256, rich, travel=far)
+        assert a.est_profit_czk >= 4000 and a.should_alert
+        poor = dataclasses.replace(cfg.pricing, far_alert_min_profit_czk=a.est_profit_czk + 1)
+        assert not assess("bazos", 3000, AIR_M1_256, poor, travel=far).should_alert

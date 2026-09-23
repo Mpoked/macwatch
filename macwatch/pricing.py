@@ -39,7 +39,8 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
     """Posoudí inzerát.
 
     Cesta není filtr, ale náklad: připočte se k ceně, sníží zisk a ROI a posune verdikt.
-    Kus za hranicí `max_km` se nepingne, v přehledu ale zůstane.
+    Kus za hranicí `max_km` se nepingne, v přehledu ale zůstane. Výjimkou je zisk aspoň
+    `far_alert_min_profit_czk`, kvůli tomu se vyplatí jet i dál.
     """
     distance = travel.distance_km if travel else None
     travel_cost = travel.cost_czk if travel else 0
@@ -58,9 +59,9 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
     if specs.is_dealer:
         notes.append("obchodník")
     blocked = specs.is_dealer and not cfg.alert_dealers
-    if travel and not travel.within_limit:
+    far = travel is not None and not travel.within_limit
+    if far:
         notes.append(f"mimo dojezd ({distance:.0f} km)")
-        blocked = True
     effective_price = price_czk + travel_cost
     suspicious_note = "podezřele nízká cena, nejspíš krabice, díl nebo podvod"
 
@@ -73,7 +74,7 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
                           notes=(suspicious_note, *notes), **base)
     if found is None:
         cheap = effective_price <= cfg.unknown_model_alert_below_czk
-        return Assessment(Verdict.NEZNAMY_MODEL, should_alert=cheap and not blocked,
+        return Assessment(Verdict.NEZNAMY_MODEL, should_alert=cheap and not blocked and not far,
                           notes=tuple(notes), **base)
 
     reference, key, origin, samples = found
@@ -97,6 +98,10 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
     profit = adjusted - effective_price
     roi = profit / effective_price
 
+    if far and cfg.far_alert_min_profit_czk and profit >= cfg.far_alert_min_profit_czk:
+        far = False
+        notes.append(f"daleko, ale zisk aspoň {cfg.far_alert_min_profit_czk} Kč")
+
     if effective_price <= buy_limit:
         verdict = Verdict.KOUPIT_S_RIZIKEM if specs.red_flags else Verdict.KOUPIT
     elif effective_price <= watch_limit:
@@ -106,7 +111,7 @@ def assess(source: str, price_czk: int | None, specs: Specs, cfg: PricingConfig,
 
     return Assessment(
         verdict=verdict,
-        should_alert=verdict in ALERT_VERDICTS and not blocked,
+        should_alert=verdict in ALERT_VERDICTS and not blocked and not far,
         reference_czk=reference,
         reference_key=key,
         reference_origin=origin,
