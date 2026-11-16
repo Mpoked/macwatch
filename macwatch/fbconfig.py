@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-MIN_INTERVAL = 15
+MIN_INTERVAL = 5
 SORT_NEWEST = "creation_time_descend"
 DAY_CHOICES = (("", "Bez omezení"), ("1", "Posledních 24 hodin"), ("7", "Posledních 7 dní"),
                ("30", "Posledních 30 dní"))

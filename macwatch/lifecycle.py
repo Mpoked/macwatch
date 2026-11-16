@@ -46,7 +46,8 @@ class LifecycleStats:
 
 class BazosLifecycle:
     def __init__(self, source: BazosSource, db: Database, pipeline: Pipeline,
-                 clock: Callable[[], datetime]) -> None:
+                 clock: Callable[[], datetime], tick: Callable[[], None] = lambda: None) -> None:
+        self.tick = tick  # volá se mezi požadavky, ať několikaminutová kontrola nezdrží sběr nových inzerátů
         self.source = source
         self.db = db
         self.pipeline = pipeline
@@ -101,6 +102,7 @@ class BazosLifecycle:
     def _search_pass(self, stats: LifecycleStats, started: datetime, alert_stats: RunStats) -> None:
         offset = 0
         for _ in range(self.source.cfg.lifecycle_max_pages):
+            self.tick()
             page = self.source.search_page(offset)
             stats.pages += 1
             self._snapshot(page.hits)
@@ -161,6 +163,7 @@ class BazosLifecycle:
         budget = self.source.cfg.lifecycle_confirm_per_pass
         for row in self.db.unseen_active("bazos", started, budget):
             key = (row["source"], row["source_id"])
+            self.tick()
             try:
                 detail = self.source.check_detail(row["url"])
             except Exception as exc:

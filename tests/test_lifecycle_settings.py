@@ -164,6 +164,18 @@ class TestLifecycle:
         assert lifecycle.due()
 
 
+    def test_tick_runs_between_requests(self, env):
+        clock, db, pipeline = env
+        seed(db, "1", 10000, T0)
+        seed(db, "2", 10000, T0)
+        clock.now = T0 + timedelta(days=2)
+        pages = [SearchPage(25, 1, 20, [hit("1")]), SearchPage(25, 21, 25, [])]
+        ticks = []
+        source = StubSource(pages, {})
+        BazosLifecycle(source, db, pipeline, clock, tick=lambda: ticks.append(len(source.checked))).run()
+        assert ticks == [0, 0, 0], "před každou stránkou hledání a před každým detailem"
+
+
 class TestSettings:
     def write_config(self, tmp_path, config_data):
         path = tmp_path / "config.json"

@@ -128,6 +128,7 @@ class Service:
         self.notifier_url: str | None = None  # None, ať se chybějící webhook ohlásí při startu
         self.notifier: DiscordNotifier | None = None
         self.pipeline = Pipeline(self.cfg, db, None, max_details=details, gazetteer=default_gazetteer())
+        self._collected_at = _utcnow()
         self._apply(self.cfg)
 
     def _apply(self, cfg: AppConfig) -> None:
@@ -147,10 +148,8 @@ class Service:
         except ConfigError as exc:
             log.error("nové nastavení je neplatné, jedu se starým: %s", exc)
 
-    def run_once(self, stop: threading.Event | None = None, lifecycle: str = "auto") -> None:
-        sources = build_sources(self.cfg, self.client)
-        if not sources:
-            log.error("žádný zdroj není zapnutý")
+    def _collect(self, sources: list[Source], stop: threading.Event | None = None) -> None:
+        self._collected_at = _utcnow()
         for source in sources:
             if stop is not None and stop.is_set():
                 return
@@ -166,12 +165,25 @@ class Service:
                 gone = self.db.expire_unseen(source.name, _utcnow() - timedelta(days=1))
                 if gone:
                     log.info("%s: %d inzerátů vypadlo z feedu, označeno jako zmizelé", source.name, gone)
+
+    def _collect_if_due(self, sources: list[Source]) -> None:
+        if (_utcnow() - self._collected_at).total_seconds() >= self.cfg.poll_interval_seconds:
+            self._collect(sources)
+
+    def run_once(self, stop: threading.Event | None = None, lifecycle: str = "auto") -> None:
+        sources = build_sources(self.cfg, self.client)
+        if not sources:
+            log.error("žádný zdroj není zapnutý")
+        self._collect(sources, stop)
+        if stop is not None and stop.is_set():
+            return
         self.pipeline.refresh()
         self.pipeline.reassess_active({s.name for s in sources if s.supports_enrich})
         bazos = next((s for s in sources if isinstance(s, BazosSource)), None)
         if bazos is None or lifecycle == "never":
             return
-        checker = BazosLifecycle(bazos, self.db, self.pipeline, _utcnow)
+        checker = BazosLifecycle(bazos, self.db, self.pipeline, _utcnow,
+                                 tick=lambda: self._collect_if_due(sources))
         if lifecycle == "force" or checker.due():
             checker.run()
         if refit_due(self.db.conn, _utcnow(), self.cfg.market.refit_interval_days) and \

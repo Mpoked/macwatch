@@ -35,7 +35,7 @@ FIELDS: tuple[Field, ...] = (
     Field("discord_webhook_url", "secret", "Discord webhook URL", "Upozornění",
           "Nastavení kanálu, Integrace, Webhooky, Kopírovat URL."),
     Field("poll_interval_seconds", "int", "Interval průchodu (s)", "Upozornění",
-          "Jak často se čtou RSS feedy. Bazoš snese 180 až 300 s."),
+          "Jak často se čtou RSS feedy. Bazoš drží RSS v cache 60 s, kratší interval nic nepřinese."),
 
     Field("sources.bazos.enabled", "bool", "Bazoš zapnutý", "Zdroje"),
     Field("sources.bazos.feeds", "lines", "Bazoš RSS feedy", "Zdroje", "Jeden feed na řádek."),

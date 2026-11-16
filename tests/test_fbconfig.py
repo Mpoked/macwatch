@@ -57,7 +57,7 @@ def test_save_keeps_server_settings(fb_path):
 
 
 @pytest.mark.parametrize("change, message", [
-    (dict(refresh_minutes=5), "15 minut"),
+    (dict(refresh_minutes=4), "5 minut"),
     (dict(urls=[]), "aspoň jednu"),
     (dict(days_since_listed="3"), "stáří"),
 ])
