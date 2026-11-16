@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from statistics import mean, median
 
 from macwatch.config import MarketConfig, PricingConfig
+from macwatch.db import GONE_UNSEEN
 from macwatch.pricemodel import DEFAULT_BASE, PriceModel, config_factor, load_models
 
 
@@ -73,9 +74,9 @@ def sold_listing_samples(conn: sqlite3.Connection, cfg: MarketConfig, now: datet
            WHERE l.gone_at IS NOT NULL AND l.gone_at >= ?
              AND l.price_czk > 0 AND a.eligible = 1 AND a.is_dealer = 0
              AND a.red_flags = '[]' AND a.family IS NOT NULL AND a.chip IS NOT NULL
-             AND a.verdict != 'PODEZRELE'
+             AND a.verdict != 'PODEZRELE' AND COALESCE(l.gone_reason, '') != ?
              AND julianday(l.gone_at) - julianday(COALESCE(l.published_at, l.first_seen)) <= ?""",
-        (since, cfg.sold_within_days)).fetchall()
+        (since, GONE_UNSEEN, cfg.sold_within_days)).fetchall()
     return [Sample(r["family"], r["chip"], r["ram_gb"], r["ssd_gb"], r["source"], r["price_czk"],
                    r["days"], r["gone_at"]) for r in rows]
 

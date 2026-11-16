@@ -16,6 +16,9 @@ from macwatch.models import Assessment, RawListing, Specs
 log = logging.getLogger(__name__)
 
 PARSER_VERSION = 2
+#: důvod zmizení u zdroje bez detailu (Facebook): inzerát se přestal objevovat ve feedu.
+#: Není to prodej, do naměřených cen se nepočítá.
+GONE_UNSEEN = "vypadl z feedu"
 
 _MIGRATION_NAME = re.compile(r"^(\d{4})_[\w-]+\.sql$")
 
@@ -207,6 +210,18 @@ class Database:
                 """UPDATE listings SET gone_at = COALESCE(gone_at, ?),
                        gone_reason = COALESCE(gone_reason, ?), last_checked_at = ?
                    WHERE source = ? AND source_id = ?""", (_iso(now), reason, _iso(now), *key))
+
+    def expire_unseen(self, source: str, before: datetime) -> int:
+        """Aktivní inzeráty zdroje, které feed nenesl od `before`, označí jako zmizelé.
+
+        Za okamžik zmizení se bere poslední spatření. Vrací počet označených.
+        """
+        with self.conn:
+            cur = self.conn.execute(
+                """UPDATE listings SET gone_at = last_seen, gone_reason = ?
+                   WHERE source = ? AND gone_at IS NULL AND last_seen < ?""",
+                (GONE_UNSEEN, source, _iso(before)))
+        return cur.rowcount
 
     def mark_checked(self, key: tuple[str, str], now: datetime) -> None:
         """Inzerát jsme viděli při kontrole životního cyklu."""

@@ -68,6 +68,17 @@ class TestSoldSamples:
         hit = reference_book(db.conn, cfg.market, cfg.pricing, NOW).lookup("bazos", "air", "m1", 256)
         assert hit[0] == 9200 and hit[3] == 3
 
+    def test_listings_dropped_from_feed_are_not_sales(self, db, cfg):
+        start = NOW - timedelta(days=30)
+        for i, price in enumerate((9000, 9200, 9400)):
+            add_listing(db, str(i), price, start, start + timedelta(days=3), source="facebook")
+        for i in range(3):   # z feedu vypadly rychle, ale prodané nejsou
+            add_listing(db, f"fb{i}", 20000, start, source="facebook")
+        db.touch(("facebook", "fb0"), start + timedelta(days=2))
+        db.expire_unseen("facebook", start + timedelta(days=3))
+        hit = reference_book(db.conn, cfg.market, cfg.pricing, NOW).lookup("facebook", "air", "m1", 256)
+        assert hit[0] == 9200 and hit[3] == 3
+
     def test_manual_used_until_enough_samples(self, db, cfg):
         start = NOW - timedelta(days=30)
         add_listing(db, "1", 12000, start, start + timedelta(days=3))

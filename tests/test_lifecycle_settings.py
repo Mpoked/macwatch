@@ -125,6 +125,17 @@ class TestLifecycle:
         assert stats.added == 1
         assert (stats.gone, stats.confirmed_alive) == (1, 1)
 
+    def test_offset_follows_real_page_size(self, env):
+        clock, db, pipeline = env
+        pages = {0: SearchPage(60, 1, 40, [hit("1")]), 40: SearchPage(60, 41, 60, [hit("2")])}
+
+        class ByOffset(StubSource):
+            def search_page(self, offset):
+                return self.pages[offset]   # pevný krok 20 by tu spadl na KeyError
+
+        stats = BazosLifecycle(ByOffset(pages, {}), db, pipeline, clock).run()
+        assert stats.complete and stats.pages == 2 and not stats.errors
+
     def test_incomplete_pass_marks_nothing_gone(self, env):
         clock, db, pipeline = env
         seed(db, "1", 10000, T0)

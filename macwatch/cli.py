@@ -10,7 +10,7 @@ import signal
 import subprocess
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from macwatch import __version__, logging_setup
@@ -159,6 +159,13 @@ class Service:
                 limit = self.pipeline.max_details if self.pipeline.max_details is not None \
                     else source.cfg.max_details_per_poll
                 self.pipeline.enrich_backlog(source, limit - stats.details_fetched)
+            elif not stats.errors:
+                # fb-mp-rss drží inzerát ve feedu 7 dní po posledním spatření na stránce. Co z feedu
+                # vypadlo, je pryč: bez toho by se mrtvé inzeráty dál posuzovaly a při změně
+                # referenční ceny pingaly týdny po vložení.
+                gone = self.db.expire_unseen(source.name, _utcnow() - timedelta(days=1))
+                if gone:
+                    log.info("%s: %d inzerátů vypadlo z feedu, označeno jako zmizelé", source.name, gone)
         self.pipeline.refresh()
         self.pipeline.reassess_active({s.name for s in sources if s.supports_enrich})
         bazos = next((s for s in sources if isinstance(s, BazosSource)), None)

@@ -1,9 +1,9 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from macwatch.db import Database, Migration, bundled_migrations, migrate, schema_version
+from macwatch.db import GONE_UNSEEN, Database, Migration, bundled_migrations, migrate, schema_version
 from macwatch.models import RawListing
 
 NOW = datetime(2026, 9, 13, 21, 0, tzinfo=timezone.utc)
@@ -77,6 +77,20 @@ def test_price_history_and_gone():
     assert [r["price_czk"] for r in db.price_history(("bazos", "1"))] == [8900, 8000]
     db.mark_gone(("bazos", "1"), NOW)
     assert db.get_listing(("bazos", "1"))["gone_at"] == NOW.isoformat(timespec="seconds")
+
+
+def test_expire_unseen_marks_only_stale_listings_of_the_source():
+    db = Database.open(":memory:")
+    old, fresh = NOW - timedelta(days=2), NOW - timedelta(hours=1)
+    db.insert_listing(item(source="facebook", source_id="stale"), 8900, old)
+    db.insert_listing(item(source="facebook", source_id="fresh"), 8900, fresh)
+    db.insert_listing(item(source="bazos", source_id="stale"), 8900, old)
+    assert db.expire_unseen("facebook", NOW - timedelta(days=1)) == 1
+    gone = db.get_listing(("facebook", "stale"))
+    assert gone["gone_at"] == old.isoformat(timespec="seconds") and gone["gone_reason"] == GONE_UNSEEN
+    assert db.get_listing(("facebook", "fresh"))["gone_at"] is None
+    assert db.get_listing(("bazos", "stale"))["gone_at"] is None
+    assert db.expire_unseen("facebook", NOW - timedelta(days=1)) == 0, "podruhé už nic"
 
 
 def test_same_id_on_different_sources_are_distinct():

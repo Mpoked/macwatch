@@ -29,7 +29,6 @@ log = logging.getLogger(__name__)
 
 RUN_NAME = "bazos:lifecycle"
 PRAGUE = ZoneInfo("Europe/Prague")
-PAGE_SIZE = 20
 RETRY_AFTER = timedelta(minutes=30)
 
 
@@ -120,7 +119,8 @@ class BazosLifecycle:
                 # neúplný průchod se zapíše jako chyba, ať se kontrola zopakuje brzy
                 stats.errors.append(f"stránka hledání {offset} bez inzerátů nebo bez počtu")
                 return
-            offset += PAGE_SIZE
+            # Bazoš mění počet inzerátů na stránce (dnes 40); pevný krok 20 by četl každý dvakrát
+            offset += max(page.last - page.first + 1, 1)
         stats.errors.append(f"dosažen limit {self.source.cfg.lifecycle_max_pages} stránek hledání")
 
     def _add_unknown(self, hit, stats: LifecycleStats) -> None:
