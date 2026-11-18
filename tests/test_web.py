@@ -94,6 +94,27 @@ class TestPages:
         assert "&lt;script&gt;" in html
         assert get(app, "/inzerat/bazos/999").status == 404
 
+    def test_deal_card_has_photo_offer_and_message(self, app):
+        conn = app._shared_db.conn
+        seed_listing(app, "223776164", 5000)
+        with conn:
+            conn.execute("UPDATE assessments SET target_czk = 7600")
+        html = text(get(app, "/"))
+        assert 'src="https://www.bazos.cz/img/1t/164/223776164.jpg"' in html
+        assert "Nabídni <b>4 500 Kč</b>" in html and "nejvýš 7 200 Kč" in html
+        assert 'data-copy="Dobrý den, mám zájem o MacBook Air M1 8/256.' in html
+        assert "Nabídni" in html and "<table" not in html
+        assert "<table" in text(get(app, "/", view="tabulka"))
+
+    def test_hide_and_restore(self, app):
+        key = seed_listing(app, "1", title="Otravný kus")
+        resp = post(app, "/skryt", {"source": key[0], "source_id": key[1], "next": "/"})
+        assert resp.status == 303
+        assert "Otravný kus" not in text(get(app, "/"))
+        assert "Otravný kus" in text(get(app, "/", show="skryte"))
+        post(app, "/skryt", {"source": key[0], "source_id": key[1], "next": "/"})
+        assert "Otravný kus" in text(get(app, "/"))
+
     def test_unknown_page_and_method(self, app):
         assert get(app, "/neexistuje").status == 404
         assert post(app, "/", {}).status == 405

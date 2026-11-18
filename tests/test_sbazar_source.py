@@ -38,6 +38,7 @@ def test_parse_search():
     assert pro.price_raw == "29900 Kč" and pro.locality == "České Budějovice"
     assert pro.published_at == datetime(2026, 11, 18, 13, 49, 40, tzinfo=timezone.utc), "Praha je v listopadu +1"
     assert not pro.body_complete
+    assert pro.image_url == "https://d46-a.sdn.cz/d_46/c_img_qH_B/test/2a86.jpeg" and items[0].image_url is None
     assert items[2].price_raw == "dohodou"
 
 

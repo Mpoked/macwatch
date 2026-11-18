@@ -44,7 +44,8 @@ def to_listing(row: dict[str, Any], fetched_at: datetime) -> RawListing:
         title=(row.get("name") or "").strip(), price_raw=price_raw, body=row.get("description"),
         body_complete="description" in row, fetched_at=fetched_at,
         locality=(row.get("locality") or {}).get("municipality") or None,
-        published_at=_published(row.get("create_date")), reserved=bool(row.get("is_reserved")))
+        published_at=_published(row.get("create_date")), reserved=bool(row.get("is_reserved")),
+        image_url=next(("https:" + i["url"] for i in row.get("images") or [] if i.get("url")), None))
 
 
 def parse_search(text: str, fetched_at: datetime) -> tuple[list[RawListing], int]:

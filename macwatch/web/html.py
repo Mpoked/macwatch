@@ -155,7 +155,35 @@ svg.chart{width:100%;height:auto;max-width:760px}
 svg.chart text{fill:var(--muted-foreground);font-size:11px}
 .legend{margin-top:6px}.legend span{margin-right:16px;font-size:13px;color:var(--muted-foreground)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-@media (max-width:640px){th,td{padding:8px 10px}.card .v{font-size:20px}h1{font-size:21px}main{padding-top:20px}}
+.deals{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:12px;margin-bottom:16px}
+.deal{display:flex;gap:14px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--border);
+border-radius:var(--radius);padding:12px;box-shadow:0 1px 2px oklch(0 0 0 / 5%)}
+.deal.v-koupit{border-left-color:var(--success)}.deal.v-koupit_s_rizikem{border-left-color:var(--warning)}
+.deal.v-neznamy_model,.deal.v-overit{border-left-color:var(--info)}
+.deal .photo{flex:0 0 112px;height:112px;border-radius:calc(var(--radius) - 2px);overflow:hidden;background:var(--muted);
+display:flex;align-items:center;justify-content:center;text-decoration:none}
+.deal .photo img{width:100%;height:100%;object-fit:cover}.nophoto{font-size:36px;opacity:.5}
+.deal .info{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.deal .top{display:flex;gap:4px;flex-wrap:wrap}
+.deal h3{margin:2px 0 0;font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.deal h3 a{text-decoration:none}
+.deal .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.deal .money{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.deal .actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.deal .actions .btn{height:32px;padding:0 12px}
+@media (max-width:640px){th,td{padding:8px 10px}.card .v{font-size:20px}h1{font-size:21px}main{padding-top:20px}
+.deals{grid-template-columns:1fr}.deal .photo{flex-basis:84px;height:84px}}
+"""
+
+# Kopírování do schránky. navigator.clipboard funguje jen přes HTTPS nebo localhost,
+# dashboard běží na http://IP v síti, proto záloha přes skryté textarea.
+COPY_JS = """
+document.addEventListener('click',function(ev){var b=ev.target.closest('[data-copy]');if(!b)return;
+var t=b.getAttribute('data-copy'),done=function(){var o=b.textContent;b.textContent='Zkopírováno';
+setTimeout(function(){b.textContent=o},1500)};
+if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(done);return}
+var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';
+document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}finally{a.remove()}});
 """
 
 
@@ -215,7 +243,7 @@ def layout(title: str, active: str, body: str, flash: str | None = None,
             f'<meta name=viewport content="width=device-width,initial-scale=1">'
             f"<title>{e(title)} · macwatch</title><style>{CSS}</style></head><body>"
             f'<header><div class=in><strong>macwatch</strong><nav>{nav}</nav></div></header>'
-            f"<main>{notice}{body}</main></body></html>")
+            f"<main>{notice}{body}</main><script>{COPY_JS}</script></body></html>")
 
 
 def table(headers: Iterable[tuple[str, str]], rows: Iterable[Iterable[str]], empty: str = "Zatím nic.") -> str:

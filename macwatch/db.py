@@ -146,11 +146,11 @@ class Database:
             self.conn.execute(
                 """INSERT INTO listings (source, source_id, url, title, price_czk, price_raw,
                        body, body_complete, category, locality, postal_code, published_at,
-                       first_seen, last_seen)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       first_seen, last_seen, image_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (item.source, item.source_id, item.url, item.title, price_czk, item.price_raw,
                  item.body, int(item.body_complete), item.category, item.locality,
-                 item.postal_code, _iso(item.published_at), _iso(now), _iso(now)))
+                 item.postal_code, _iso(item.published_at), _iso(now), _iso(now), item.image_url))
             self._record_price(item.key, price_czk, item.price_raw, now)
 
     def set_detail_status(self, key: tuple[str, str], status: str | None) -> None:
@@ -165,11 +165,22 @@ class Database:
                    AND detail_status IS NULL
                ORDER BY COALESCE(published_at, first_seen) DESC LIMIT ?""", (source, limit)).fetchall()
 
-    def set_status(self, key: tuple[str, str], status: str | None, published_at: datetime | None) -> None:
+    def set_status(self, key: tuple[str, str], status: str | None, published_at: datetime | None,
+                   image_url: str | None = None) -> None:
         with self.conn:
             self.conn.execute(
-                """UPDATE listings SET status = ?, published_at = COALESCE(?, published_at)
-                   WHERE source = ? AND source_id = ?""", (status, _iso(published_at), *key))
+                """UPDATE listings SET status = ?, published_at = COALESCE(?, published_at),
+                       image_url = COALESCE(?, image_url)
+                   WHERE source = ? AND source_id = ?""", (status, _iso(published_at), image_url, *key))
+
+    def toggle_hidden(self, key: tuple[str, str], now: datetime) -> bool:
+        """Skryje inzerát z přehledu, podruhé ho vrátí. Vrací, jestli je teď skrytý."""
+        with self.conn:
+            self.conn.execute(
+                """UPDATE listings SET hidden_at = CASE WHEN hidden_at IS NULL THEN ? END
+                   WHERE source = ? AND source_id = ?""", (_iso(now), *key))
+        row = self.conn.execute("SELECT hidden_at FROM listings WHERE source = ? AND source_id = ?", key).fetchone()
+        return bool(row and row[0])
 
     def update_content(self, item: RawListing, now: datetime) -> None:
         """Doplní text a lokalitu, typicky po stažení detailu."""

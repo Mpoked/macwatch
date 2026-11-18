@@ -24,6 +24,7 @@ class RawListing:
     published_at: datetime | None = None
     sold: bool = False          # zdroj hlásí prodáno
     reserved: bool = False      # zdroj hlásí rezervováno
+    image_url: str | None = None
 
     @property
     def key(self) -> tuple[str, str]:

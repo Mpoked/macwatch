@@ -199,7 +199,7 @@ class Pipeline:
             else:
                 log.debug("rozpočet detailů vyčerpán, %s počká na další průchod", item.url)
 
-        self.db.set_status(item.key, "reserved" if item.reserved else None, item.published_at)
+        self.db.set_status(item.key, "reserved" if item.reserved else None, item.published_at, item.image_url)
         if item.sold:
             # prodaný kus je nejlepší tržní vzorek: zmizel s touto cenou
             self.db.mark_gone(item.key, now, "prodáno")

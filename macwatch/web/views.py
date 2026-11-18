@@ -14,7 +14,8 @@ from macwatch.db import Database
 from macwatch.geo import default_gazetteer
 from macwatch.inventory import COST_KINDS, Inventory, economics
 from macwatch.market import market_overview, price_timeline, reference_book
-from macwatch.models import Specs
+from macwatch.models import Assessment, Specs
+from macwatch.notify import seller_message, suggest_offer
 from macwatch.settings import (
     FIELDS,
     FIELDS_BY_PATH,
@@ -135,6 +136,7 @@ def post_button(action: str, label: str, hidden: dict[str, object], cls: str = "
 LISTING_SQL = """
 SELECT l.source, l.source_id, l.url, l.title, l.price_czk, l.price_raw, l.locality, l.first_seen,
        l.last_seen, l.gone_at, l.alerted_at, l.body, l.postal_code, l.gone_reason, l.status,
+       l.image_url, l.hidden_at,
        COALESCE(l.published_at, l.first_seen) AS listed_at,
        a.eligible, a.family, a.chip, a.ram_gb, a.ssd_gb, a.year, a.battery_pct, a.cycles, a.is_dealer,
        a.red_flags, a.reference_czk, a.reference_origin, a.reference_samples,
@@ -188,6 +190,64 @@ def listing_rows(rows: list[sqlite3.Row], now: datetime, next_url: str) -> list[
     return out
 
 
+def thumb_url(row: sqlite3.Row) -> str | None:
+    """Malý náhled. Bazoš ho má na adrese odvozené z čísla inzerátu, Sbazar umí zmenšit na serveru."""
+    if row["source"] == "bazos":
+        sid = row["source_id"]
+        return f"https://www.bazos.cz/img/1t/{sid[-3:]}/{sid}.jpg"
+    if row["image_url"] and row["source"] == "sbazar":
+        return row["image_url"] + "?fl=exf|res,280,280,3|webp,75"
+    return row["image_url"]
+
+
+def deal_cards(rows: list[sqlite3.Row], now: datetime, next_url: str) -> str:
+    """Karty výhodných kusů: fotka, cena a zisk, nabídka, rychlé akce."""
+    out = []
+    for r in rows:
+        specs = specs_from_row(r)
+        price = r["price_czk"]
+        offer = suggest_offer(price, Assessment(r["verdict"], target_czk=r["target_czk"],
+                                                travel_cost_czk=r["travel_cost_czk"])) if price else None
+        thumb = thumb_url(r)
+        photo = (f'<img src="{e(thumb)}" alt="" loading=lazy referrerpolicy=no-referrer>' if thumb
+                 else '<span class=nophoto>💻</span>')
+        flags = json.loads(r["red_flags"] or "[]")
+        badges = [verdict_badge(r["verdict"])]
+        if flags:
+            badges.append(f'<span class="badge bad">{e(", ".join(flags).replace("_", " "))}</span>')
+        if r["is_dealer"]:
+            badges.append('<span class="badge muted">obchodník</span>')
+        if r["status"] == "reserved":
+            badges.append('<span class="badge warn">rezervováno</span>')
+        if r["first_price"] and price and price < r["first_price"]:
+            badges.append(f'<span class="badge warn">zlevněno z {e(czk(r["first_price"]))}</span>')
+        money = e(czk(price)) if price is not None else e(r["price_raw"] or "·")
+        if r["est_profit_czk"] is not None:
+            money += (f' <span class=muted>→</span> <span class="{signed_class(r["est_profit_czk"])}">'
+                      f'{e(czk(r["est_profit_czk"], sign=True))}</span> <span class=muted>({e(pct(r["roi"]))})</span>')
+        lines = [f'<div class=money>{money}</div>']
+        if offer:
+            lines.append(f'<div>Nabídni <b>{e(czk(offer[0]))}</b> <span class=muted>· nejvýš {e(czk(offer[1]))}</span></div>')
+        where = [e(r["locality"] or "")]
+        if r["distance_km"] is not None:
+            where.append(f'{num(r["distance_km"])} km, cesta {e(czk(r["travel_cost_czk"]))}')
+        where += [source_label(r["source"]), e(age(r["listed_at"], now))]
+        lines.append(f'<div class=muted>{" · ".join(w for w in where if w)}</div>')
+        message = seller_message(specs, offer[0] if offer else None)
+        hide = post_button("/skryt", "Obnovit" if r["hidden_at"] else "Skrýt",
+                           {"source": r["source"], "source_id": r["source_id"], "next": next_url})
+        out.append(
+            f'<article class="deal v-{e((r["verdict"] or "").lower())}">'
+            f'<a class=photo href="/inzerat/{e(r["source"])}/{e(r["source_id"])}">{photo}</a>'
+            f'<div class=info><div class=top>{" ".join(badges)}</div>'
+            f'<h3><a href="/inzerat/{e(r["source"])}/{e(r["source_id"])}">{e(specs.model_label())}</a></h3>'
+            f'<div class="muted title">{e(r["title"])}</div>{"".join(lines)}'
+            f'<div class=actions><a class=btn href="{safe_url(r["url"])}" target=_blank rel="noopener noreferrer">Otevřít</a>'
+            f'<button type=button class=ghost data-copy="{e(message)}">Zpráva</button>'
+            f'{star_form(r["source"], r["source_id"], r["shortlisted_at"] is not None, next_url)}{hide}</div></div></article>')
+    return f'<div class=deals>{"".join(out)}</div>' if out else '<p class=muted>Žádné nálezy pro tyto filtry.</p>'
+
+
 LISTING_HEADERS = [("", ""), ("Verdikt", ""), ("ROI", "num"), ("Model", ""), ("Inzerát", "wrap"),
                    ("Cena", "num"), ("Reference", "num"), ("Zisk", "num"), ("Dojezd", "num"),
                    ("Místo", ""), ("Zdroj", ""), ("Vloženo", "")]
@@ -210,10 +270,12 @@ def recompute(ctx: Ctx) -> int:
 def findings(ctx: Ctx) -> Response:
     req = ctx.req
     show = req.arg("show", "vyhodne")
+    view = req.arg("view", "karty")
     source = req.arg("source")
     max_km = req.arg("km")
     text = req.arg("q").strip()
-    where = ["l.gone_at IS NULL", "(a.eligible = 1 OR a.verdict = 'OVERIT')"]
+    where = ["l.gone_at IS NULL", "(a.eligible = 1 OR a.verdict = 'OVERIT')",
+             "l.hidden_at IS NOT NULL" if show == "skryte" else "l.hidden_at IS NULL"]
     params: list[Any] = []
     if show == "vyhodne":
         where.append(f"a.verdict IN ({','.join('?' for _ in INTERESTING)})")
@@ -233,10 +295,12 @@ def findings(ctx: Ctx) -> Response:
     rows = ctx.db.conn.execute(
         LISTING_SQL + " WHERE " + " AND ".join(where) +
         " ORDER BY a.score IS NULL, a.score DESC, listed_at DESC LIMIT 300", params).fetchall()
-    here = url_with("/", show=show, source=source, km=max_km, q=text)
+    here = url_with("/", show=show, view=view, source=source, km=max_km, q=text)
     filters = (
         '<form class=filters method=get action="/">'
-        + select_field("show", "Zobrazit", [("vyhodne", "Zajímavé"), ("vse", "Všechny MacBooky")], show)
+        + select_field("show", "Zobrazit", [("vyhodne", "Zajímavé"), ("vse", "Všechny MacBooky"),
+                                            ("skryte", "Skryté")], show)
+        + select_field("view", "Vzhled", [("karty", "Karty"), ("tabulka", "Tabulka")], view)
         + select_field("source", "Zdroj", [("", "Všechny"), ("bazos", "Bazoš"), ("facebook", "Marketplace"), ("sbazar", "Sbazar")], source)
         + input_field("km", "Max. km", max_km, "number", attrs='min=0 step=1 style="width:90px"')
         + input_field("q", "Hledat v titulku", text)
@@ -251,8 +315,9 @@ def findings(ctx: Ctx) -> Response:
         ("Model mimo tabulku", str(by_verdict.get("NEZNAMY_MODEL", 0)), ""),
         ("Aktivních MacBooků", str(sum(by_verdict.values())), ""),
     ])
-    body = (f"<h1>Nálezy</h1>{summary}{filters}"
-            + table(LISTING_HEADERS, listing_rows(rows, ctx.now, here), "Žádné nálezy pro tyto filtry.")
+    listing = (table(LISTING_HEADERS, listing_rows(rows, ctx.now, here), "Žádné nálezy pro tyto filtry.")
+               if view == "tabulka" else deal_cards(rows, ctx.now, here))
+    body = (f"<h1>Nálezy</h1>{summary}{filters}{listing}"
             + '<p class=muted>Seřazeno podle skóre (ROI po započtení cesty a srážek).</p>')
     return ctx.page("Nálezy", "/", body)
 
@@ -333,6 +398,12 @@ def shortlist_toggle(ctx: Ctx) -> Response:
         else:
             return redirect(ctx.back("/"), "Inzerát neexistuje.", "bad")
     return redirect(ctx.back("/"), msg)
+
+
+def hide_toggle(ctx: Ctx) -> Response:
+    key = (ctx.req.form.get("source", ""), ctx.req.form.get("source_id", ""))
+    hidden = ctx.db.toggle_hidden(key, ctx.now)
+    return redirect(ctx.back("/"), "Skryto z přehledu." if hidden else "Vráceno do přehledu.")
 
 
 def shortlist_note(ctx: Ctx) -> Response:
@@ -1051,6 +1122,7 @@ ROUTES = [
     ("GET", "/shortlist", shortlist_page),
     ("POST", "/shortlist/prepnout", shortlist_toggle),
     ("POST", "/shortlist/poznamka", shortlist_note),
+    ("POST", "/skryt", hide_toggle),
     ("GET", "/trh", market_page),
     ("GET", "/trh/skupina", market_group),
     ("GET", "/ceny", prices_page),
