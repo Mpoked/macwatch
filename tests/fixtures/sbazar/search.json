@@ -1,0 +1,60 @@
+{
+ "pagination": {
+  "limit": 200,
+  "offset": 0,
+  "total": 3
+ },
+ "results": [
+  {
+   "id": 235982898,
+   "name": "MacBook Air 13 2018 256GB, 8GB Space Gray",
+   "price": 4000,
+   "price_by_agreement": false,
+   "create_date": "2026-11-18T15:32:13",
+   "is_reserved": false,
+   "seo_name": "235982898-macbook-air-13-2018-256gb-8gb-space-gray",
+   "locality": {
+    "municipality": "Praha"
+   },
+   "category": {
+    "id": 143,
+    "name": "Notebooky",
+    "seo_name": "143-notebooky"
+   }
+  },
+  {
+   "id": 235981185,
+   "name": "MacBook Pro 16\" M2 Pro 16GB/512GB",
+   "price": 29900,
+   "price_by_agreement": false,
+   "create_date": "2026-11-18T14:49:40",
+   "is_reserved": false,
+   "seo_name": "235981185-macbook-pro-16-m2-pro-16gb512gb",
+   "locality": {
+    "municipality": "České Budějovice"
+   },
+   "category": {
+    "id": 143,
+    "name": "Notebooky",
+    "seo_name": "143-notebooky"
+   }
+  },
+  {
+   "id": 235963062,
+   "name": "Prodám MacBook neo 512gb",
+   "price": 0,
+   "price_by_agreement": true,
+   "create_date": "2026-11-17T22:27:42",
+   "is_reserved": false,
+   "seo_name": "235963062-prodam-macbook-neo-512gb",
+   "locality": {
+    "municipality": "České Budějovice"
+   },
+   "category": {
+    "id": 143,
+    "name": "Notebooky",
+    "seo_name": "143-notebooky"
+   }
+  }
+ ]
+}

@@ -218,7 +218,7 @@ def findings(ctx: Ctx) -> Response:
     if show == "vyhodne":
         where.append(f"a.verdict IN ({','.join('?' for _ in INTERESTING)})")
         params.extend(INTERESTING)
-    if source in ("bazos", "facebook"):
+    if source in ("bazos", "facebook", "sbazar"):
         where.append("l.source = ?")
         params.append(source)
     if max_km:
@@ -237,7 +237,7 @@ def findings(ctx: Ctx) -> Response:
     filters = (
         '<form class=filters method=get action="/">'
         + select_field("show", "Zobrazit", [("vyhodne", "Zajímavé"), ("vse", "Všechny MacBooky")], show)
-        + select_field("source", "Zdroj", [("", "Všechny"), ("bazos", "Bazoš"), ("facebook", "Marketplace")], source)
+        + select_field("source", "Zdroj", [("", "Všechny"), ("bazos", "Bazoš"), ("facebook", "Marketplace"), ("sbazar", "Sbazar")], source)
         + input_field("km", "Max. km", max_km, "number", attrs='min=0 step=1 style="width:90px"')
         + input_field("q", "Hledat v titulku", text)
         + "<div><button>Filtrovat</button></div></form>")

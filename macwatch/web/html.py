@@ -28,7 +28,7 @@ VERDICT_LABELS = {
     "MIMO": ("Mimo rozsah", "muted"),
 }
 
-SOURCE_LABELS = {"bazos": "Bazoš", "facebook": "Marketplace", "vlastni": "Vlastní prodej"}
+SOURCE_LABELS = {"bazos": "Bazoš", "facebook": "Marketplace", "sbazar": "Sbazar", "vlastni": "Vlastní prodej"}
 
 CSS = """
 :root{--background:oklch(1 0 0);--foreground:oklch(0.145 0 0);--card:oklch(1 0 0);--card-foreground:oklch(0.145 0 0);

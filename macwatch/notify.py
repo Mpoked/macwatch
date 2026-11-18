@@ -15,8 +15,8 @@ from macwatch.models import Assessment, Specs, Verdict
 
 log = logging.getLogger(__name__)
 
-SOURCE_NAMES = {"bazos": "Bazoš", "facebook": "Marketplace"}
-_SOURCE_GENITIVE = {"bazos": "Bazoše", "facebook": "Marketplace"}
+SOURCE_NAMES = {"bazos": "Bazoš", "facebook": "Marketplace", "sbazar": "Sbazar"}
+_SOURCE_GENITIVE = {"bazos": "Bazoše", "facebook": "Marketplace", "sbazar": "Sbazaru"}
 
 _HEADINGS = {
     Verdict.KOUPIT: ("✅ VYPLATÍ SE", 0x2ECC71),

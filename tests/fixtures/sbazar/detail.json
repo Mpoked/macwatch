@@ -1,0 +1,22 @@
+{
+ "result": {
+  "id": 235981185,
+  "name": "MacBook Pro 16\" M2 Pro 16GB/512GB",
+  "price": 29900,
+  "price_by_agreement": false,
+  "create_date": "2026-11-18T14:49:40",
+  "is_reserved": false,
+  "seo_name": "235981185-macbook-pro-16-m2-pro-16gb512gb",
+  "locality": {
+   "municipality": "České Budějovice"
+  },
+  "category": {
+   "id": 143,
+   "name": "Notebooky",
+   "seo_name": "143-notebooky"
+  },
+  "description": "Prodám MacBook Pro 16\" (2023), čip M2 Pro (12 CPU / 19 GPU jader), 16 GB RAM, 512 GB SSD.\n\nPoužívaný v kanceláři na programování, většinu času připojený k externímu monitoru. Velmi pěkný stav, plně funkční, bez závad. Prodávám kvůli přechodu na novější model.\n\n- Displej 16,2\" Liquid Retina XDR, 120 Hz ProMotion\n- Baterie: kondice 86 %, 414 cyklů\n- Kompletní balení: originální krabice, 140W USB-C adaptér, opletený MagSafe 3 kabel\n- Odhlášený z iCloudu, připravený pro nového majitele\n\nOsobní předání v Českých Budějovicích a okolí, notebook si můžete v klidu vyzkoušet. Po domluvě pošlu Zásilkovnou nebo PPL, jen po platbě předem (ne na dobírku).\n\nCena 29 900 Kč, za rychlé jednání jsem ochotný mírně slevit.\nNa SMS a e-maily s odkazy na platbu nebo dopravu nereaguji.",
+  "status": "active",
+  "deactivation_reason": null
+ }
+}

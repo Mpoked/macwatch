@@ -14,6 +14,11 @@ class ConfigError(ValueError):
     pass
 
 
+# slots=True: výchozí hodnota pole se z třídy číst nedá (BazosConfig.x je deskriptor), proto konstanty
+BAZOS_SEARCH_URL = "https://pc.bazos.cz/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=&kitx=ne"
+SBAZAR_SEARCH_URL = "https://www.sbazar.cz/api/v1/items/search?phrase=macbook&category_id=143&sort=-create_date"
+
+
 @dataclass(frozen=True, slots=True)
 class HttpConfig:
     user_agent: str
@@ -27,7 +32,7 @@ class BazosConfig:
     enabled: bool
     feeds: tuple[str, ...]
     max_details_per_poll: int = 25
-    lifecycle_search_url: str = "https://pc.bazos.cz/?hledat=macbook&hlokalita=&humkreis=25&cenaod=&cenado=&order=&kitx=ne"
+    lifecycle_search_url: str = BAZOS_SEARCH_URL
     lifecycle_interval_hours: float = 3.0
     lifecycle_max_pages: int = 100
     lifecycle_confirm_per_pass: int = 40
@@ -72,6 +77,13 @@ class FacebookConfig:
     enabled: bool
     feed_url: str = "http://127.0.0.1:5000/rss"
     config_path: Path | None = None     # config.json fb-mp-rss, upravuje se z dashboardu
+
+
+@dataclass(frozen=True, slots=True)
+class SbazarConfig:
+    enabled: bool = False
+    search_url: str = SBAZAR_SEARCH_URL
+    max_details_per_poll: int = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +136,7 @@ class AppConfig:
     market: MarketConfig = field(default_factory=MarketConfig)
     travel: TravelSettings = field(default_factory=TravelSettings)
     inventory: InventoryConfig = field(default_factory=InventoryConfig)
+    sbazar: SbazarConfig = field(default_factory=SbazarConfig)
 
 
 def _require(data: dict[str, Any], key: str, where: str) -> Any:
@@ -263,6 +276,7 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
     sources = _require(data, "sources", "")
     bazos = sources.get("bazos", {"enabled": False, "feeds": []})
     facebook = sources.get("facebook", {"enabled": False})
+    sbazar = sources.get("sbazar", {})
     database = Path(data.get("database", "macwatch.db"))
     if not database.is_absolute():
         database = base_dir / database
@@ -281,7 +295,7 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
             enabled=bool(bazos.get("enabled", False)),
             feeds=tuple(bazos.get("feeds", [])),
             max_details_per_poll=int(bazos.get("max_details_per_poll", 25)),
-            lifecycle_search_url=bazos.get("lifecycle_search_url", BazosConfig.lifecycle_search_url),
+            lifecycle_search_url=bazos.get("lifecycle_search_url", BAZOS_SEARCH_URL),
             lifecycle_interval_hours=float(bazos.get("lifecycle_interval_hours", 3.0)),
             lifecycle_max_pages=int(bazos.get("lifecycle_max_pages", 100)),
             lifecycle_confirm_per_pass=int(bazos.get("lifecycle_confirm_per_pass", 40)),
@@ -297,6 +311,11 @@ def parse_config(data: dict[str, Any], base_dir: Path) -> AppConfig:
         travel=parse_travel(data.get("travel", {})),
         inventory=InventoryConfig(
             capital_cap_czk=int(data.get("inventory", {}).get("capital_cap_czk", 0) or 0)),
+        sbazar=SbazarConfig(
+            enabled=bool(sbazar.get("enabled", False)),
+            search_url=sbazar.get("search_url", SBAZAR_SEARCH_URL),
+            max_details_per_poll=int(sbazar.get("max_details_per_poll", 10)),
+        ),
     )
 
 

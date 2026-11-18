@@ -3,7 +3,8 @@
 Hlídá bazary s použitými MacBooky (Air a Pro s čipem M1 a novějším), posoudí cenu
 proti referenčním cenám, výhodné kusy pošle na Discord a vede sklad a ekonomiku přeprodeje.
 
-Zdroje: Bazoš (RSS, detail a stránka hledání) a Facebook Marketplace (přes upravený fb-mp-rss
+Zdroje: Bazoš (RSS, detail a stránka hledání), Sbazar (veřejné JSON API, celý výpis MacBooků v Notebookách
+a detail) a Facebook Marketplace (přes upravený fb-mp-rss
 v Dockeru). Dashboard běží na standardní knihovně Pythonu, bez build kroku.
 
 ## Spuštění

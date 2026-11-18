@@ -170,7 +170,7 @@ def build_measured(samples: list[Sample], models: dict[str, PriceModel] | None =
     """
     models = models or {}
     by_source: dict[str, dict[str, list[Sample]]] = defaultdict(lambda: defaultdict(list))
-    sources = {s.source for s in samples if s.source != "vlastni"} | {"bazos", "facebook"}
+    sources = {s.source for s in samples if s.source != "vlastni"} | {"bazos", "facebook", "sbazar"}
     for sample in samples:
         targets = sources if sample.source == "vlastni" else {sample.source}
         for src in targets:

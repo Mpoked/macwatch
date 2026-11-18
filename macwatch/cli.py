@@ -15,7 +15,7 @@ from pathlib import Path
 
 from macwatch import __version__, logging_setup
 from macwatch.config import AppConfig, ConfigError, load_config
-from macwatch.db import Database
+from macwatch.db import GONE_UNSEEN, Database
 from macwatch.geo import default_gazetteer
 from macwatch.lifecycle import BazosLifecycle
 from macwatch.pricemodel import MIN_TOTAL_SAMPLES, asking_samples, refit, refit_due
@@ -27,6 +27,7 @@ from macwatch.sources.base import Source
 from macwatch.sources.bazos import BazosSource
 from macwatch.sources.facebook import FacebookSource
 from macwatch.sources.http import PoliteClient
+from macwatch.sources.sbazar import SbazarSource
 
 log = logging.getLogger("macwatch")
 
@@ -41,6 +42,8 @@ def build_sources(cfg: AppConfig, client: PoliteClient | None = None) -> list[So
         sources.append(BazosSource(cfg.bazos, client))
     if cfg.facebook.enabled:
         sources.append(FacebookSource(cfg.facebook, client))
+    if cfg.sbazar.enabled:
+        sources.append(SbazarSource(cfg.sbazar, client))
     return sources
 
 
@@ -162,7 +165,9 @@ class Service:
                 # fb-mp-rss drží inzerát ve feedu 7 dní po posledním spatření na stránce. Co z feedu
                 # vypadlo, je pryč: bez toho by se mrtvé inzeráty dál posuzovaly a při změně
                 # referenční ceny pingaly týdny po vložení.
-                gone = self.db.expire_unseen(source.name, _utcnow() - timedelta(days=1))
+                # Sbazar vypisuje celý seznam, chybějící kus opravdu zmizel (nejspíš prodán)
+                reason = "zmizel" if isinstance(source, SbazarSource) else GONE_UNSEEN
+                gone = self.db.expire_unseen(source.name, _utcnow() - timedelta(days=1), reason)
                 if gone:
                     log.info("%s: %d inzerátů vypadlo z feedu, označeno jako zmizelé", source.name, gone)
 

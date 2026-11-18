@@ -25,6 +25,10 @@
       "enabled": true,
       "feed_url": "http://127.0.0.1:5000/rss",
       "config_path": "fb-mp-rss/data/config.json"
+    },
+    "sbazar": {
+      "enabled": true,
+      "max_details_per_poll": 10
     }
   },
   "parsing": {

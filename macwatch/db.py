@@ -211,7 +211,7 @@ class Database:
                        gone_reason = COALESCE(gone_reason, ?), last_checked_at = ?
                    WHERE source = ? AND source_id = ?""", (_iso(now), reason, _iso(now), *key))
 
-    def expire_unseen(self, source: str, before: datetime) -> int:
+    def expire_unseen(self, source: str, before: datetime, reason: str = GONE_UNSEEN) -> int:
         """Aktivní inzeráty zdroje, které feed nenesl od `before`, označí jako zmizelé.
 
         Za okamžik zmizení se bere poslední spatření. Vrací počet označených.
@@ -220,7 +220,7 @@ class Database:
             cur = self.conn.execute(
                 """UPDATE listings SET gone_at = last_seen, gone_reason = ?
                    WHERE source = ? AND gone_at IS NULL AND last_seen < ?""",
-                (GONE_UNSEEN, source, _iso(before)))
+                (reason, source, _iso(before)))
         return cur.rowcount
 
     def mark_checked(self, key: tuple[str, str], now: datetime) -> None:
