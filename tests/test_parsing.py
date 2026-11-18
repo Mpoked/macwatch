@@ -148,6 +148,10 @@ class TestRedFlagsAndNegation:
         ("Bez MDM, bez iCloud zámku.", ()),
         ("Tři čáry přes displej, jinak ok.", ("poskozeni",)),
         ("Nezapne se.", ("na_dily",)),
+        ("Notebook se zapne, ale nejde obraz, takže na opravu nebo na náhradní díly.", ("na_dily",)),
+        ("MacBook Air m1 - 8/128G - S VADOU", ("na_dily",)),
+        ("Bez obrazu, jinak ok.", ("na_dily",)),
+        ("Bez vad, nic mu nevadí, obraz perfektní.", ()),
         ("Není nefunkční. Ale displej prasklý.", ("poskozeni",)),
     ])
     def test_flags(self, rules, body, flags):

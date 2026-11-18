@@ -139,7 +139,10 @@
         "\\bfiremni\\s+sprav\\w*"
       ],
       "na_dily": [
-        "\\bna\\s+dily\\b",
+        "\\bna\\s+(?:\\w+\\s+)?dily\\b",
+        "\\bs\\s+vad\\w*",
+        "\\bnejde\\s+obraz\\w*",
+        "\\bbez\\s+obrazu\\b",
         "\\bnefunkcn\\w*",
         "\\bnezapne\\b",
         "\\bnenabootuje\\b",
@@ -174,7 +177,9 @@
       "bazos|air|m1|512": 9800,
       "bazos|air|m1": 8900
     },
-    "alert_max_age_hours": 3
+    "alert_max_age_hours": 3,
+    "stale_after_days": 21,
+    "hot_profit_czk": 5000
   },
   "market": {
     "reference_mode": "auto",
