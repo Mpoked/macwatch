@@ -12,7 +12,7 @@ NOW = datetime(2026, 9, 13, 21, 0, tzinfo=timezone.utc)
 def rss_item(source_id="1", title="MacBook Air M1 8/256", price="5 000",
              body="Prodám MacBook, volejte 777 123 456 ..."):
     return RawListing("bazos", source_id, f"https://pc.bazos.cz/inzerat/{source_id}/x.php",
-                      title, price, body, False, NOW)
+                      title, price, body, False, NOW, published_at=NOW)  # RSS Bazoše datum nese vždy
 
 
 class FakeSource:
@@ -250,3 +250,17 @@ def test_hot_bargain_mentions_here(cfg):
     pipeline, db, clock = _clocked(cfg, notifier, NOW)
     pipeline.run_source(FakeSource([dataclasses.replace(rss_item(), published_at=NOW)]))
     assert notifier.contents == ["@here 🔥"] and notifier.sent[0]["title"].startswith("🔥")
+
+
+def test_undated_listing_is_not_pinged_until_price_drops(cfg):
+    from datetime import timedelta
+    cfg = dataclasses.replace(cfg, pricing=dataclasses.replace(cfg.pricing, alert_max_age_hours=0))
+    notifier = FakeNotifier()
+    pipeline, db, clock = _clocked(cfg, notifier, NOW)
+    undated = dataclasses.replace(rss_item(price="9 000"), published_at=None)
+    pipeline.run_source(FakeSource([undated]))
+    pipeline.run_source(FakeSource([dataclasses.replace(undated, price_raw="5 000")]))
+    assert notifier.sent == [], "neznámé stáří, ani výhodná cena nepingne"
+    clock["now"] = NOW + timedelta(hours=1)
+    pipeline.run_source(FakeSource([dataclasses.replace(undated, price_raw="4 500")]))
+    assert len(notifier.sent) == 1, "zlevnění jsme viděli sami, to je čerstvá událost"

@@ -222,7 +222,11 @@ class Pipeline:
         if item.sold or item.reserved:
             ready = False  # prodaný nebo rezervovaný kus nemá smysl pingat
         if assessment.should_alert and ready and not alerted and price is not None:
-            if self._too_old(fresh_since, now):
+            if not dropped and self.db.get_listing(item.key)["published_at"] is None:
+                # Facebook u karet donačtených scrollem datum neposílá. Bez něj by se jako čerstvý
+                # tvářil každý starý inzerát, který jsme právě poprvé uviděli.
+                log.info("výhodný, ale neznámé datum vložení, nepingám: %s", item.url)
+            elif self._too_old(fresh_since, now):
                 log.info("výhodný, ale starší než %s h, nepingám: %s", self.cfg.pricing.alert_max_age_hours,
                          item.url)
             else:
