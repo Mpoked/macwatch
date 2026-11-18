@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -52,7 +53,7 @@ def test_save_keeps_server_settings(fb_path):
     (url, levels), = data["url_filters"].items()
     assert "daysSinceListed=7" in url and "sortBy=creation_time_descend" in url
     assert levels == {"level1": ["macbook", "mac book"]}
-    assert oct(fb_path.stat().st_mode)[-3:] == "644"
+    assert os.name == "nt" or oct(fb_path.stat().st_mode)[-3:] == "644"   # Windows práva nemá
     assert not list(fb_path.parent.glob(".config-*")), "po sobě nenechá dočasný soubor"
 
 

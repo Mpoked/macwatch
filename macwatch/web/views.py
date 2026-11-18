@@ -97,8 +97,9 @@ def when(value: str | None) -> str:
     except ValueError:
         return value
     if moment.tzinfo is None:
-        return moment.strftime("%-d. %-m. %Y")
-    return moment.astimezone().strftime("%-d. %-m. %H:%M")
+        return f"{moment.day}. {moment.month}. {moment.year}"
+    moment = moment.astimezone()
+    return f"{moment.day}. {moment.month}. {moment:%H:%M}"   # %-d umí jen glibc
 
 
 def specs_from_row(row: sqlite3.Row) -> Specs:
