@@ -32,6 +32,9 @@ def normalize(text: str) -> str:
 # cena
 
 _PRICE_WORDS_NONE = ("nabidnete", "v textu", "dohodou", "dohoda", "info v textu", "cena v textu")
+# ponytail: pevný kurz, stačí na odhad výhodnosti; při velkém pohybu kurzu upravit
+EUR_CZK = 25
+
 _PRICE_WORDS_FREE = ("zdarma", "free", "daruji")
 
 
@@ -56,13 +59,16 @@ def parse_price_czk(raw: str | None) -> int | None:
         return 0
     if any(word in text for word in _PRICE_WORDS_NONE):
         return None
+    # Facebook ukazuje inzeráty ze SK/AT/DE v eurech
+    rate = EUR_CZK if re.search(r"€|eur", raw, re.I) else 1
+    text = re.sub(r"€|eur[a-z]*", " ", text)
     # měna bez hranice slova, Facebook píše i "Kč9 000"
     text = re.sub(r"czk|kc|korun[a-z]*|,-|\.-", " ", text)
     text = re.sub(r"(?<=\d)[,.]\d{2}\s*$", "", text.strip())  # haléře
     digits = re.fullmatch(r"\s*(\d{1,3}(?:[ .,]\d{3})+|\d+)\s*", text)
     if not digits:
         return None
-    return int(re.sub(r"[ .,]", "", digits.group(1)))
+    return int(re.sub(r"[ .,]", "", digits.group(1))) * rate
 
 
 # obecné pomocníky

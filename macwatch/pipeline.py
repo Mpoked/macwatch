@@ -113,6 +113,10 @@ class Pipeline:
         if needs_check(item, price, specs, assessment, self.cfg.pricing.suspicious_below_czk):
             assessment = dataclasses.replace(
                 assessment, verdict=Verdict.OVERIT, notes=("čip neuveden, inzerát má jen titulek",))
+        if self.home and travel is None and assessment.should_alert:
+            # obec mimo český seznam je skoro vždy zahraničí (Vídeň, Bratislava), tam se nejezdí
+            assessment = dataclasses.replace(
+                assessment, should_alert=False, notes=(*assessment.notes, "poloha nenalezena, nejspíš zahraničí"))
         return specs, assessment
 
     def run_source(self, source: Source) -> tuple[list[Finding], RunStats]:
