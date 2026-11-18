@@ -4,7 +4,7 @@ import urllib.error
 from email.message import Message
 
 from macwatch.models import Assessment, Specs, Verdict
-from macwatch.notify import DiscordNotifier, build_embed
+from macwatch.notify import DiscordNotifier, build_embed, suggest_offer
 from macwatch.privacy import redact_text
 
 SPECS = Specs(family="air", chip="m2", ram_gb=8, ssd_gb=256, eligible=True)
@@ -41,6 +41,21 @@ class TestEmbed:
                             assessment=Assessment(Verdict.NEZNAMY_MODEL, True))
         assert "Odhad zisku" not in embed["description"]
         assert "MacBook Pro M3 ?/?" in embed["title"]
+        assert "Nabízím" not in embed["fields"][0]["value"], "bez reference se cena nenabízí"
+
+    def test_offer_and_seller_message(self):
+        a = Assessment(Verdict.KOUPIT, True, adjusted_reference_czk=16000, target_czk=13600,
+                       travel_cost_czk=400, est_profit_czk=4500, roi=0.39)
+        embed = build_embed(source="bazos", url="u", price_czk=11500, specs=SPECS, assessment=a, hot=True)
+        assert "Nabídni **10 000 Kč**, nejvýš 13 200 Kč" in embed["description"]
+        (field,) = embed["fields"]
+        assert "MacBook Air M2 8/256" in field["value"] and "Nabízím 10 000 Kč" in field["value"]
+        assert embed["title"].startswith("🔥 ✅")
+
+    def test_offer_never_above_ceiling(self):
+        a = Assessment(Verdict.KOUPIT, True, target_czk=9200, travel_cost_czk=300)
+        assert suggest_offer(10000, a) == (8900, 8900)
+        assert suggest_offer(400, a) is None, "pod 500 Kč nemá smysl nabízet"
 
 
 class FakeResponse(io.BytesIO):
@@ -57,6 +72,8 @@ class TestNotifier:
 
         assert DiscordNotifier("https://discord/webhook", opener=opener).send({"title": "x"})
         assert sent == [{"embeds": [{"title": "x"}]}]
+        DiscordNotifier("https://discord/webhook", opener=opener).send({"title": "y"}, "@here 🔥")
+        assert sent[1]["content"] == "@here 🔥" and sent[1]["allowed_mentions"] == {"parse": ["everyone"]}
 
     def test_retries_after_rate_limit(self):
         calls, sleeps = [], []

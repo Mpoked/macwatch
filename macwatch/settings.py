@@ -60,8 +60,12 @@ FIELDS: tuple[Field, ...] = (
     Field("pricing.suspicious_below_czk", "int", "Podezřele levné pod (Kč)", "Posouzení",
           "Platí i pro modely bez reference. 0 = vypnuto."),
     Field("pricing.unknown_model_alert_below_czk", "int", "Pingnout neznámý model pod (Kč)", "Posouzení"),
+    Field("pricing.hot_profit_czk", "int", "🔥 @here při zisku aspoň (Kč)", "Upozornění",
+          "Výrazně výhodný kus přijde s @here, ať ho člověk nepřehlédne. 0 = vypnuto."),
     Field("pricing.alert_max_age_hours", "float", "Pingnout jen inzeráty mladší než (h)", "Upozornění",
           "Počítá se od vložení nebo od posledního zlevnění. 0 = bez omezení."),
+    Field("pricing.stale_after_days", "float", "Neprodaný výhodný kus je jen Sledovat po (dnech)", "Posouzení",
+          "Co se za tu cenu tak dlouho neprodalo, asi tak výhodné není. Zlevnění počítadlo vynuluje. 0 = vypnuto."),
 
     Field("market.reference_mode", "choice", "Referenční cena", "Trh",
           choices=(("auto", "Naměřená, když je dost vzorků, jinak ruční"), ("manual", "Jen ruční tabulka"))),

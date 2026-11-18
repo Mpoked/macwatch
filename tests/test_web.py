@@ -22,7 +22,7 @@ class FakeNotifier:
     def __init__(self, url):
         self.url = url
 
-    def send(self, embed):
+    def send(self, embed, content=None):
         FakeNotifier.sent.append((self.url, embed))
         return True
 

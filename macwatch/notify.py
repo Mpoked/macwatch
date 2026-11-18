@@ -41,9 +41,33 @@ def relative_age(moment: datetime, now: datetime | None = None) -> str:
     return f"před {minutes // 1440} dny"
 
 
+def suggest_offer(price_czk: int, assessment: Assessment) -> tuple[int, int] | None:
+    """(nabídka, strop). Strop je nejvyšší cena, za kterou kus po cestě ještě vychází jako KOUPIT.
+
+    Nabídka je o 10 % níž, zaokrouhlená dolů na 500 Kč, nikdy nad strop. None, když není co nabídnout.
+    """
+    if assessment.target_czk is None:
+        return None
+    ceiling = assessment.target_czk - (assessment.travel_cost_czk or 0)
+    offer = min(int(price_czk * 0.9) // 500 * 500, ceiling)
+    return (offer, ceiling) if 0 < offer < price_czk else None
+
+
+def seller_message(specs: Specs, offer: int | None) -> str:
+    text = (f"Dobrý den, mám zájem o {specs.model_label()}. Je ještě k dispozici? "
+            "Pošlete prosím sériové číslo, počet cyklů baterie (Informace o systému → Napájení) "
+            "a potvrďte, že je odhlášený z iCloudu a Najít.")
+    if offer:
+        text += f" Nabízím {format_czk(offer)} při osobním předání."
+    return text
+
+
 def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
-                assessment: Assessment, now: datetime | None = None) -> dict[str, Any]:
+                assessment: Assessment, now: datetime | None = None, hot: bool = False) -> dict[str, Any]:
     heading, color = _HEADINGS.get(assessment.verdict, (assessment.verdict, 0x95A5A6))
+    if hot:
+        heading = "🔥 " + heading
+    offer = suggest_offer(price_czk, assessment)
     parts = [f"Cena: **{format_czk(price_czk)}**"]
     if assessment.adjusted_reference_czk is not None:
         parts.append(f"Reference: {format_czk(assessment.adjusted_reference_czk)}")
@@ -51,6 +75,8 @@ def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
         parts.append(f"Odhad zisku: **+{format_czk(assessment.est_profit_czk)}** "
                      f"(ROI {assessment.roi * 100:.0f} %)")
     lines = [" · ".join(parts)]
+    if offer:
+        lines.append(f"Nabídni **{format_czk(offer[0])}**, nejvýš {format_czk(offer[1])}")
     if specs.red_flags:
         lines.append("Riziko: " + ", ".join(specs.red_flags).replace("_", " "))
     if assessment.distance_km is not None:
@@ -73,6 +99,9 @@ def build_embed(*, source: str, url: str, price_czk: int, specs: Specs,
         "url": url,
         "description": "\n".join(lines),
         "color": color,
+        # blok kódu jde v Discordu na mobilu zkopírovat jedním ťuknutím
+        "fields": [{"name": "Zpráva prodejci",
+                    "value": f"```{seller_message(specs, offer[0] if offer else None)}```"[:1024]}],
         "footer": {"text": SOURCE_NAMES.get(source, source)},
     }
 
@@ -94,8 +123,11 @@ class DiscordNotifier:
         self._timeout = timeout
         self._max_attempts = max_attempts
 
-    def send(self, embed: dict[str, Any]) -> bool:
-        payload = json.dumps({"embeds": [embed]}).encode("utf-8")
+    def send(self, embed: dict[str, Any], content: str | None = None) -> bool:
+        message: dict[str, Any] = {"embeds": [embed]}
+        if content:
+            message |= {"content": content, "allowed_mentions": {"parse": ["everyone"]}}
+        payload = json.dumps(message).encode("utf-8")
         for attempt in range(1, self._max_attempts + 1):
             request = urllib.request.Request(
                 self.webhook_url, data=payload, method="POST",

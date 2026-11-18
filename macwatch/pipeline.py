@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 class Notifier(Protocol):
-    def send(self, embed: dict[str, Any]) -> bool: ...
+    def send(self, embed: dict[str, Any], content: str | None = None) -> bool: ...
 
 
 @dataclass(slots=True)
@@ -212,8 +212,9 @@ class Pipeline:
     def _assess_and_alert(self, item: RawListing, price: int | None, supports_enrich: bool,
                           alerted: bool, stats: RunStats, now: datetime) -> Finding:
         specs, assessment = self.evaluate(item, price)
-        self.db.save_assessment(item.key, specs, assessment, now)
         fresh_since, dropped = self.db.freshness(item.key)
+        assessment = self._demote_stale(assessment, fresh_since, now)
+        self.db.save_assessment(item.key, specs, assessment, now)
         assessment = dataclasses.replace(assessment, fresh_since=fresh_since, price_dropped=dropped)
         finding = Finding(item, price, specs, assessment)
         # bez plného textu nevíme o červených vlajkách, s upozorněním se počká
@@ -227,6 +228,19 @@ class Pipeline:
             else:
                 finding.alerted = self._alert(finding, stats)
         return finding
+
+    def _demote_stale(self, assessment: Assessment, fresh_since: datetime | None, now: datetime) -> Assessment:
+        """Výhodný kus, který se za tu cenu dlouho neprodal, nejspíš výhodný není: jen SLEDOVAT."""
+        limit = self.cfg.pricing.stale_after_days
+        if not limit or fresh_since is None or assessment.verdict not in (Verdict.KOUPIT, Verdict.KOUPIT_S_RIZIKEM):
+            return assessment
+        if fresh_since.tzinfo is None:
+            fresh_since = fresh_since.replace(tzinfo=timezone.utc)
+        days = (now - fresh_since).days
+        if days < limit:
+            return assessment
+        return dataclasses.replace(assessment, verdict=Verdict.SLEDOVAT, should_alert=False,
+                                   notes=(*assessment.notes, f"visí {days} dní bez prodeje"))
 
     def _too_old(self, fresh_since: datetime | None, now: datetime) -> bool:
         limit = self.cfg.pricing.alert_max_age_hours
@@ -309,10 +323,12 @@ class Pipeline:
     def _alert(self, finding: Finding, stats: RunStats) -> bool:
         if self.notifier is None:
             return False
+        hot_limit = self.cfg.pricing.hot_profit_czk
+        hot = bool(hot_limit) and (finding.assessment.est_profit_czk or 0) >= hot_limit
         embed = build_embed(source=finding.item.source, url=finding.item.url,
                             price_czk=finding.price_czk or 0, specs=finding.specs,
-                            assessment=finding.assessment, now=self._now())
-        if self.notifier.send(embed):
+                            assessment=finding.assessment, now=self._now(), hot=hot)
+        if self.notifier.send(embed, "@here 🔥" if hot else None):
             self.db.mark_alerted(finding.item.key, self._now())
             stats.alerts_sent += 1
             return True

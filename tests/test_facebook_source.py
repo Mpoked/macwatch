@@ -85,7 +85,7 @@ def test_pipeline_alerts_facebook_without_detail_using_bazos_reference(cfg):
     sent = []
 
     class Notifier:
-        def send(self, embed):
+        def send(self, embed, content=None):
             sent.append(embed)
             return True
 
@@ -134,7 +134,7 @@ def test_pipeline_sold_goes_to_market_data_and_reserved_is_not_alerted(cfg):
     sent = []
 
     class Notifier:
-        def send(self, embed):
+        def send(self, embed, content=None):
             sent.append(embed)
             return True
 
@@ -178,7 +178,7 @@ class RecordingNotifier:
         self.sent = []
         self.ok = ok
 
-    def send(self, embed):
+    def send(self, embed, content=None):
         self.sent.append(embed)
         return self.ok
 

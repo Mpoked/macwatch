@@ -42,7 +42,8 @@ Napoprvé viz [Setup od nuly](#setup-od-nuly), na trvalý běh [Běh jako služb
    životního cyklu (`--refit-prices` ručně). Zamčené řádky přepočet nepřepíše.
 6. Pingne se jen inzerát mladší než `alert_max_age_hours` (výchozí 3 h), počítáno od vložení
    nebo od posledního zlevnění. Starý výhodný kus zůstane v přehledu, ale nepřijde na Discord.
-   V upozornění je napsané, kdy byl kus vložen nebo zlevněn.
+   V upozornění je napsané, kdy byl kus vložen nebo zlevněn. Výhodný kus, který se neprodal
+   do `stale_after_days` (výchozí 21 dní, od vložení nebo zlevnění), spadne na SLEDOVAT.
 7. K ceně se připočte cesta: vzdálenost od domova po silnici krát spotřeba krát cena paliva,
    tam i zpět. Cesta sníží zisk, ROI i verdikt. Kus dál než `max_km` se nepingne.
 

@@ -41,10 +41,12 @@ class FakeSource:
 class FakeNotifier:
     def __init__(self, ok=True):
         self.sent = []
+        self.contents = []
         self.ok = ok
 
-    def send(self, embed):
+    def send(self, embed, content=None):
         self.sent.append(embed)
+        self.contents.append(content)
         return self.ok
 
 
@@ -228,3 +230,23 @@ def test_age_limit_zero_means_no_limit(cfg):
     pipeline.run_source(FakeSource([dataclasses.replace(rss_item(), published_at=NOW)]))
     assert len(notifier.sent) == 1
     assert "Vloženo před" in notifier.sent[0]["description"]
+
+
+def test_long_unsold_bargain_is_only_watched_until_price_drops(cfg):
+    from datetime import timedelta
+    cfg = dataclasses.replace(cfg, pricing=dataclasses.replace(cfg.pricing, alert_max_age_hours=0))
+    notifier = FakeNotifier()
+    pipeline, db, clock = _clocked(cfg, notifier, NOW + timedelta(days=30))
+    (found,), _ = pipeline.run_source(FakeSource([dataclasses.replace(rss_item(), published_at=NOW)]))
+    assert found.assessment.verdict == Verdict.SLEDOVAT and notifier.sent == []
+    assert "visí 30 dní bez prodeje" in found.assessment.notes
+    (found,), _ = pipeline.run_source(FakeSource([dataclasses.replace(rss_item(price="4 500"), published_at=NOW)]))
+    assert found.assessment.verdict == Verdict.KOUPIT and len(notifier.sent) == 1, "zlevnění = nová šance"
+
+
+def test_hot_bargain_mentions_here(cfg):
+    cfg = dataclasses.replace(cfg, pricing=dataclasses.replace(cfg.pricing, alert_max_age_hours=0, hot_profit_czk=1))
+    notifier = FakeNotifier()
+    pipeline, db, clock = _clocked(cfg, notifier, NOW)
+    pipeline.run_source(FakeSource([dataclasses.replace(rss_item(), published_at=NOW)]))
+    assert notifier.contents == ["@here 🔥"] and notifier.sent[0]["title"].startswith("🔥")

@@ -107,6 +107,8 @@ class PricingConfig:
     suspicious_below_czk: int = 3000      # a pod touto cenou taky, i když reference chybí
     buy_min_profit_czk: int = 0           # koupit i tehdy, když zisk po cestě dosáhne aspoň tolika Kč, 0 = vypnuto
     far_alert_min_profit_czk: int = 0     # pingnout i kus za max_km, když zisk po cestě dosáhne aspoň tolika Kč
+    hot_profit_czk: int = 0               # zisk aspoň tolik Kč = ping s @here a 🔥, 0 = vypnuto
+    stale_after_days: float = 21.0        # výhodný kus neprodaný déle (od vložení nebo zlevnění) je jen SLEDOVAT, 0 = vypnuto
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,10 +198,12 @@ def parse_pricing(data: dict[str, Any]) -> PricingConfig:
         alert_dealers=bool(data.get("alert_dealers", False)),
         unknown_model_alert_below_czk=int(data.get("unknown_model_alert_below_czk", 0)),
         alert_max_age_hours=max(float(data.get("alert_max_age_hours", 3.0) or 0), 0.0),
+        stale_after_days=max(float(data.get("stale_after_days", 21.0) or 0), 0.0),
         suspicious_below_ratio=float(data.get("suspicious_below_ratio", 0.3)),
         suspicious_below_czk=int(data.get("suspicious_below_czk", 3000)),
         buy_min_profit_czk=max(int(data.get("buy_min_profit_czk", 0) or 0), 0),
         far_alert_min_profit_czk=max(int(data.get("far_alert_min_profit_czk", 0) or 0), 0),
+        hot_profit_czk=max(int(data.get("hot_profit_czk", 0) or 0), 0),
         fallback_source=data.get("fallback_source"),
         reference={key.lower(): value for key, value in reference.items()},
     )
