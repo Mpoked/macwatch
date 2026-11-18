@@ -71,7 +71,8 @@ def parse_feed(xml_text: str, fetched_at: datetime) -> list[RawListing]:
             title=(node.findtext("title") or "").strip(), price_raw=fields.get("price", ""),
             body=None, body_complete=False, fetched_at=fetched_at,
             locality=locality, published_at=published,
-            sold=fields.get("is_sold") == "true", reserved=fields.get("is_pending") == "true"))
+            sold=fields.get("is_sold") == "true", reserved=fields.get("is_pending") == "true",
+            image_url=fields.get("image") or None))
     return items
 
 

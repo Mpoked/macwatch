@@ -219,3 +219,12 @@ def test_title_without_chip_needs_check(cfg):
         assert assessment.verdict == verdict, title
     _, accessory = pipeline.evaluate(dataclasses.replace(item, title="Redukce pro Macbook", body=""), 800)
     assert accessory.verdict == Verdict.MIMO
+
+
+def test_feed_photo():
+    xml = ('<rss><channel><item><title>MacBook Air M1</title>'
+           '<link>https://www.facebook.com/marketplace/item/42/</link>'
+           '<description>price: 9 000 Kč\nimage: https://scontent.x.fbcdn.net/v/a.jpg?stp=c&amp;oe=6B00</description>'
+           '</item></channel></rss>')
+    (item,) = parse_feed(xml, NOW)
+    assert item.image_url == "https://scontent.x.fbcdn.net/v/a.jpg?stp=c&oe=6B00"

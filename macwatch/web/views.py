@@ -209,7 +209,9 @@ def deal_cards(rows: list[sqlite3.Row], now: datetime, next_url: str) -> str:
         offer = suggest_offer(price, Assessment(r["verdict"], target_czk=r["target_czk"],
                                                 travel_cost_czk=r["travel_cost_czk"])) if price else None
         thumb = thumb_url(r)
-        photo = (f'<img src="{e(thumb)}" alt="" loading=lazy referrerpolicy=no-referrer>' if thumb
+        # odkaz na fotku z Facebooku platí jen pár dní, po vypršení ukáže ikonu
+        photo = (f'<img src="{e(thumb)}" alt="" loading=lazy referrerpolicy=no-referrer '
+                 """onerror="this.outerHTML='<span class=nophoto>💻</span>'">""" if thumb
                  else '<span class=nophoto>💻</span>')
         flags = json.loads(r["red_flags"] or "[]")
         badges = [verdict_badge(r["verdict"])]
